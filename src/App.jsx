@@ -37,6 +37,16 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [page, setPage] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Détection mobile
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Chargement de l'authentification
   useEffect(() => {
@@ -61,7 +71,6 @@ export default function App() {
     if (session) {
       loadAllData();
     } else {
-      // Vider les données à la déconnexion
       setAgents([]);
       setLivraisons([]);
       setAvances([]);
@@ -286,7 +295,7 @@ export default function App() {
         menuOpen={menuOpen} 
       />
       
-      {menuOpen && (
+      {menuOpen && !isMobile && (
         <div style={{ 
           position: 'fixed', 
           top: 57, 
@@ -301,7 +310,7 @@ export default function App() {
       )}
 
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 57px)' }}>
-        <Sidebar page={page} onNavigate={nav} enCours={enCours} />
+        {!isMobile && <Sidebar page={page} onNavigate={nav} enCours={enCours} />}
         
         <main style={{ flex: 1, padding: '16px', overflowY: 'auto', paddingBottom: 90 }}>
           <Toast toast={toast} />
