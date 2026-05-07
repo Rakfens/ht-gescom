@@ -11,6 +11,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Scrollbar personnalisée */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -30,29 +31,27 @@ body {
   background: #3b82f6;
 }
 
+/* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .toast-animation {
   animation: fadeIn 0.3s ease-out;
 }
 
-@media (max-width: 768px) {
-  .responsive-table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-}
-
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button {
-  opacity: 0.5;
-}
-
-input:focus, select:focus, textarea:focus, button:focus {
+/* Focus styles */
+input:focus, 
+select:focus, 
+textarea:focus, 
+button:focus {
   outline: none;
   box-shadow: 0 0 0 2px #3b82f6;
   border-radius: 4px;
@@ -60,4 +59,169 @@ input:focus, select:focus, textarea:focus, button:focus {
 
 button:focus {
   box-shadow: 0 0 0 2px #3b82f6;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+/* Input number spinner removal */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
+/* ===================================================== */
+/* RESPONSIVE MOBILE */
+/* ===================================================== */
+
+/* Tablettes et mobiles (max-width: 768px) */
+@media (max-width: 768px) {
+  
+  /* Cacher la sidebar sur mobile (on utilise la bottom nav) */
+  aside {
+    display: none !important;
+  }
+  
+  /* Grilles : passer de 2 colonnes à 1 colonne */
+  div[style*="gridTemplateColumns: repeat(2,1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Ajuster les cartes client */
+  .client-card {
+    margin: 8px !important;
+  }
+  
+  /* Boutons pleine largeur sur mobile */
+  button {
+    width: 100%;
+    margin: 4px 0;
+  }
+  
+  /* Réduire l'espacement */
+  div[style*="padding: 16px"] {
+    padding: 12px !important;
+  }
+  
+  /* Tableaux responsifs */
+  table, thead, tbody, th, td, tr {
+    display: block;
+  }
+  
+  thead tr {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+  
+  tr {
+    margin-bottom: 1rem;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 8px;
+  }
+  
+  td {
+    border: none;
+    position: relative;
+    padding-left: 50% !important;
+    text-align: right !important;
+  }
+  
+  td:before {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    width: 45%;
+    padding-right: 10px;
+    white-space: nowrap;
+    text-align: left;
+    font-weight: bold;
+    content: attr(data-label);
+  }
+  
+  /* Ajuster les conteneurs flex */
+  div[style*="display: flex"] {
+    flex-wrap: wrap;
+  }
+  
+  /* Réduire la taille des badges */
+  span[style*="border-radius: 20px"] {
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+  }
+  
+  /* Espacement des éléments d'historique */
+  .client-section {
+    margin-bottom: 12px;
+  }
+  
+  /* Ajuster la navigation du bas */
+  .bottom-nav {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* Très petits écrans (max-width: 480px) */
+@media (max-width: 480px) {
+  body {
+    font-size: 12px;
+  }
+  
+  h1 {
+    font-size: 18px !important;
+  }
+  
+  h2 {
+    font-size: 14px !important;
+  }
+  
+  .title {
+    font-size: 14px;
+  }
+  
+  /* Réduire les paddings */
+  div[style*="padding: 14px 16px"] {
+    padding: 10px 12px !important;
+  }
+  
+  /* Réduire la taille des inputs */
+  input, select, button {
+    font-size: 12px !important;
+    padding: 8px 10px !important;
+  }
+  
+  /* Logo plus petit */
+  img[alt="Logo"] {
+    width: 30px !important;
+    height: 30px !important;
+  }
+  
+  /* Texte de l'en-tête plus petit */
+  .company-name {
+    font-size: 14px !important;
+  }
+  
+  .company-sub {
+    font-size: 9px !important;
+  }
+}
+
+/* Tablettes en mode paysage (entre 769px et 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Ajuster les grilles */
+  div[style*="gridTemplateColumns: repeat(2,1fr)"] {
+    grid-template-columns: repeat(2,1fr) !important;
+  }
+  
+  /* Sidebar plus petite */
+  aside {
+    width: 180px !important;
+  }
 }
