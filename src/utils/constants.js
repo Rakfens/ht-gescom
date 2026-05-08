@@ -29,7 +29,7 @@ export const PAIE_MODES = {
   client: { label: 'Payé au client', icon: '🤝' },
 };
 
-// ==================== COULEURS (STYLES) ====================
+// ==================== COULEURS (Thème clair/sombre avec variables CSS) ====================
 export const COLORS = {
   bg: 'var(--bg)',
   card: 'var(--card)',
@@ -55,7 +55,7 @@ export const COMMISSION_DEFAUT = 500;
 
 // ==================== COMMISSION GÉRANT ====================
 // Clients exclus de la commission (le gérant ne gagne rien pour ces clients)
-export const EXCLUDED_CLIENTS = ['POMANAY', 'ZAZATIANA' ];
+export const EXCLUDED_CLIENTS = ['POMANAY', 'ATERINAY'];
 
 // Fonction pour déterminer si le gérant doit recevoir une commission
 // Le gérant gagne sa commission si :

@@ -4,8 +4,46 @@
   box-sizing: border-box;
 }
 
+/* Thème sombre (défaut) */
+:root {
+  --bg: #0b1120;
+  --card: #141e2e;
+  --border: #1e293b;
+  --border2: #2d3d55;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+  --blue: #3b82f6;
+  --green: #34d399;
+  --orange: #fb923c;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --purple: #a78bfa;
+  --teal: #38bdf8;
+  --pink: #f472b6;
+}
+
+/* Thème clair */
+[data-theme="light"] {
+  --bg: #f0f8ff;
+  --card: #ffffff;
+  --border: #cbd5e1;
+  --border2: #e2e8f0;
+  --text: #1e293b;
+  --muted: #475569;
+  --subtle: #64748b;
+  --blue: #2563eb;
+  --green: #059669;
+  --orange: #ea580c;
+  --yellow: #d97706;
+  --red: #dc2626;
+  --purple: #7c3aed;
+  --teal: #0d9488;
+  --pink: #db2777;
+}
+
 body {
-  background: #0b1120;
+  background: var(--bg);
   font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -18,17 +56,17 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #141e2e;
+  background: var(--border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2d3d55;
+  background: var(--border2);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b82f6;
+  background: var(--blue);
 }
 
 /* Animations */
@@ -53,20 +91,12 @@ select:focus,
 textarea:focus, 
 button:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #3b82f6;
+  box-shadow: 0 0 0 2px var(--blue);
   border-radius: 4px;
 }
 
 button:focus {
-  box-shadow: 0 0 0 2px #3b82f6;
-}
-
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px #3b82f6;
+  box-shadow: 0 0 0 2px var(--blue);
 }
 
 /* Input number spinner removal */
@@ -75,40 +105,21 @@ input[type=number]::-webkit-outer-spin-button {
   opacity: 0.5;
 }
 
-/* ===================================================== */
-/* RESPONSIVE MOBILE */
-/* ===================================================== */
-
-/* Tablettes et mobiles (max-width: 768px) */
+/* Responsive mobile */
 @media (max-width: 768px) {
-  
-  /* Cacher la sidebar sur mobile (on utilise la bottom nav) */
   aside {
     display: none !important;
   }
   
-  /* Grilles : passer de 2 colonnes à 1 colonne */
   div[style*="gridTemplateColumns: repeat(2,1fr)"] {
     grid-template-columns: 1fr !important;
   }
   
-  /* Ajuster les cartes client */
-  .client-card {
-    margin: 8px !important;
-  }
-  
-  /* Boutons pleine largeur sur mobile */
   button {
     width: 100%;
     margin: 4px 0;
   }
   
-  /* Réduire l'espacement */
-  div[style*="padding: 16px"] {
-    padding: 12px !important;
-  }
-  
-  /* Tableaux responsifs */
   table, thead, tbody, th, td, tr {
     display: block;
   }
@@ -121,7 +132,7 @@ input[type=number]::-webkit-outer-spin-button {
   
   tr {
     margin-bottom: 1rem;
-    border: 1px solid #1e293b;
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px;
   }
@@ -144,31 +155,8 @@ input[type=number]::-webkit-outer-spin-button {
     font-weight: bold;
     content: attr(data-label);
   }
-  
-  /* Ajuster les conteneurs flex */
-  div[style*="display: flex"] {
-    flex-wrap: wrap;
-  }
-  
-  /* Réduire la taille des badges */
-  span[style*="border-radius: 20px"] {
-    font-size: 9px !important;
-    padding: 2px 6px !important;
-  }
-  
-  /* Espacement des éléments d'historique */
-  .client-section {
-    margin-bottom: 12px;
-  }
-  
-  /* Ajuster la navigation du bas */
-  .bottom-nav {
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
 }
 
-/* Très petits écrans (max-width: 480px) */
 @media (max-width: 480px) {
   body {
     font-size: 12px;
@@ -181,83 +169,4 @@ input[type=number]::-webkit-outer-spin-button {
   h2 {
     font-size: 14px !important;
   }
-  
-  .title {
-    font-size: 14px;
-  }
-  
-  /* Réduire les paddings */
-  div[style*="padding: 14px 16px"] {
-    padding: 10px 12px !important;
-  }
-  
-  /* Réduire la taille des inputs */
-  input, select, button {
-    font-size: 12px !important;
-    padding: 8px 10px !important;
-  }
-  
-  /* Logo plus petit */
-  img[alt="Logo"] {
-    width: 30px !important;
-    height: 30px !important;
-  }
-  
-  /* Texte de l'en-tête plus petit */
-  .company-name {
-    font-size: 14px !important;
-  }
-  
-  .company-sub {
-    font-size: 9px !important;
-  }
-}
-
-/* Tablettes en mode paysage (entre 769px et 1024px) */
-@media (min-width: 769px) and (max-width: 1024px) {
-  /* Ajuster les grilles */
-  div[style*="gridTemplateColumns: repeat(2,1fr)"] {
-    grid-template-columns: repeat(2,1fr) !important;
-  }
-  
-  /* Sidebar plus petite */
-  aside {
-    width: 180px !important;
-  }
-
-  :root {
-  --bg: #0b1120;
-  --card: #141e2e;
-  --border: #1e293b;
-  --border2: #2d3d55;
-  --text: #e2e8f0;
-  --muted: #64748b;
-  --subtle: #94a3b8;
-  --blue: #3b82f6;
-  --green: #34d399;
-  --orange: #fb923c;
-  --yellow: #fbbf24;
-  --red: #f87171;
-  --purple: #a78bfa;
-  --teal: #38bdf8;
-  --pink: #f472b6;
-}
-
-[data-theme="light"] {
-  --bg: #f0f4f8;
-  --card: #ffffff;
-  --border: #cbd5e1;
-  --border2: #e2e8f0;
-  --text: #1e293b;
-  --muted: #475569;
-  --subtle: #64748b;
-  --blue: #2563eb;
-  --green: #059669;
-  --orange: #ea580c;
-  --yellow: #d97706;
-  --red: #dc2626;
-  --purple: #7c3aed;
-  --teal: #0d9488;
-  --pink: #db2777;
-}
 }
