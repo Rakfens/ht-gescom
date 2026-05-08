@@ -1,10 +1,23 @@
+import { useRef } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { uploadLogoFile, updateLogo } from '../../services/configService';
 
 export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }) => {
   const { theme, toggleTheme } = useTheme();
   const fileInputRef = useRef(null);
 
-  // ... reste du code
+  const handleLogoUpload = async (file) => {
+    if (!file) return;
+    try {
+      const url = await uploadLogoFile(file);
+      await updateLogo(url);
+      setLogoUrl(url);
+      alert('Logo modifié avec succès !');
+    } catch (error) {
+      console.error('Erreur upload logo:', error);
+      alert("Erreur lors de l'upload du logo");
+    }
+  };
 
   return (
     <div style={{ 
@@ -33,9 +46,23 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
           }} 
           onError={(e) => {
             e.target.style.display = 'none';
-            e.target.nextSibling.style.display = 'flex';
+            if (e.target.nextSibling) {
+              e.target.nextSibling.style.display = 'flex';
+            }
           }}
         />
+        <div style={{ 
+          width: 40, 
+          height: 40, 
+          background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', 
+          borderRadius: 10, 
+          display: 'none', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          fontSize: 22
+        }}>
+          📦
+        </div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>
             Aterinay Services

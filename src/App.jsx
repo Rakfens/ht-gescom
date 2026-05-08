@@ -21,14 +21,6 @@ import { Gerant } from './components/Gerant/Gerant';
 import { Recap } from './components/Recap/Recap';
 import { Agents } from './components/Agents/Agents';
 
-export default function App() {
-  return (
-    <ThemeProvider>
-      <AppContent />
-    </ThemeProvider>
-  );
-}
-
 function AppContent() {
   // États d'authentification
   const [session, setSession] = useState(null);
@@ -75,7 +67,7 @@ function AppContent() {
     };
   }, []);
 
-  // Recharger les données quand la session change (connexion/déconnexion)
+  // Recharger les données quand la session change
   useEffect(() => {
     if (session) {
       loadAllData();
@@ -292,9 +284,9 @@ function AppContent() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      background: COLORS.bg, 
+      background: 'var(--bg)', 
       fontFamily: "'Segoe UI', system-ui, sans-serif", 
-      color: COLORS.text 
+      color: 'var(--text)'
     }}>
       <Header 
         logoUrl={logoUrl} 
@@ -310,8 +302,8 @@ function AppContent() {
           top: 57, 
           left: 0, 
           right: 0, 
-          background: COLORS.card, 
-          borderBottom: '1px solid ' + COLORS.border, 
+          background: 'var(--card)', 
+          borderBottom: '1px solid var(--border)', 
           zIndex: 99 
         }}>
           <Sidebar page={page} onNavigate={nav} enCours={enCours} />
@@ -391,5 +383,13 @@ function AppContent() {
 
       <BottomNav page={page} onNavigate={nav} enCours={enCours} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
