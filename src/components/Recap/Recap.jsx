@@ -96,14 +96,25 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   };
 
   const handleUpdateAvance = async () => {
-    if (editAvanceData.annule) {
-      // Si c'est une avance annulée, on ne peut pas la modifier
-      showToast('Cette avance est annulée, modification impossible', 'error');
+    if (!editAvanceData.montant) {
+      showToast('Montant requis', 'error');
       return;
     }
+    // Pour modifier une avance, on l'annule d'abord puis on en crée une nouvelle
     await onAnnulerAvance(editAvanceId);
+    const agent = agents.find(a => a.id === parseInt(editAvanceData.agent_id));
+    await onAddAvance({
+      agent_id: editAvanceData.agent_id,
+      agent_nom: agent?.nom,
+      montant: parseFloat(editAvanceData.montant),
+      motif: editAvanceData.motif,
+      date: new Date().toISOString().split('T')[0],
+      mois: currentMonth(),
+      annule: false
+    });
     setEditAvanceId(null);
-    showToast('Avance annulée', 'warn');
+    setEditAvanceData({});
+    showToast('Avance modifiée');
   };
 
   const handleDeleteAvance = async (id) => {
@@ -174,7 +185,7 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
             <span>💸 Frais: <b style={{ color: COLORS.orange }}>{formatAr(a.totalFrais)}</b></span>
           </div>
 
-          {/* Liste des avances avec motif et boutons */}
+          {/* Liste des avances avec motif et boutons Modifier/Supprimer */}
           {a.avances.length > 0 && (
             <div style={{ marginTop: 10, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.pink, marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -183,42 +194,70 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
               </div>
               {a.avances.map(av => (
                 <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                      <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 13 }}>{formatAr(parseFloat(av.montant || 0))}</span>
-                      {av.motif && (
-                        <span style={{ fontSize: 11, color: COLORS.subtle, background: COLORS.border, padding: '2px 10px', borderRadius: 15 }}>
-                          📝 {av.motif}
-                        </span>
-                      )}
-                      <span style={{ fontSize: 10, color: COLORS.muted }}>📅 {av.date}</span>
-                      {av.annule && <span style={{ fontSize: 10, color: COLORS.red }}>⚠️ Annulée</span>}
-                    </div>
-                  </div>
-                  {!av.annule ? (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button 
-                        onClick={() => handleCancelAvance(av.id)} 
-                        style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
-                        title="Annuler cette avance (ne sera pas déduite)"
-                      >
-                        ❌ Annuler
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteAvance(av.id)} 
-                        style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
-                        title="Supprimer définitivement"
-                      >
-                        🗑 Supprimer
-                      </button>
+                  {editAvanceId === av.id ? (
+                    // Mode édition
+                    <div style={{ display: 'flex', gap: 8, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input 
+                        type="number" 
+                        style={{ ...inpSm(), width: 120 }} 
+                        value={editAvanceData.montant} 
+                        onChange={e => setEditAvanceData({ ...editAvanceData, montant: e.target.value })} 
+                      />
+                      <input 
+                        type="text" 
+                        style={{ ...inpSm(), width: 180 }} 
+                        placeholder="Motif" 
+                        value={editAvanceData.motif || ''} 
+                        onChange={e => setEditAvanceData({ ...editAvanceData, motif: e.target.value })} 
+                      />
+                      <button style={{ ...btn(COLORS.green, '#047857'), padding: '6px 12px' }} onClick={handleUpdateAvance}>✓</button>
+                      <button style={{ ...btn('#475569', '#334155'), padding: '6px 12px' }} onClick={() => setEditAvanceId(null)}>✕</button>
                     </div>
                   ) : (
-                    <button 
-                      onClick={() => handleDeleteAvance(av.id)} 
-                      style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
-                    >
-                      🗑 Supprimer
-                    </button>
+                    <>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 13 }}>{formatAr(parseFloat(av.montant || 0))}</span>
+                          {av.motif && (
+                            <span style={{ fontSize: 11, color: COLORS.subtle, background: COLORS.border, padding: '2px 10px', borderRadius: 15 }}>
+                              📝 {av.motif}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 10, color: COLORS.muted }}>📅 {av.date}</span>
+                          {av.annule && <span style={{ fontSize: 10, color: COLORS.red }}>⚠️ Annulée</span>}
+                        </div>
+                      </div>
+                      {!av.annule ? (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button 
+                            onClick={() => {
+                              setEditAvanceId(av.id);
+                              setEditAvanceData({ 
+                                agent_id: av.agent_id, 
+                                montant: av.montant, 
+                                motif: av.motif || '' 
+                              });
+                            }} 
+                            style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
+                          >
+                            ✏️ Modifier
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteAvance(av.id)} 
+                            style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
+                          >
+                            🗑 Supprimer
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => handleDeleteAvance(av.id)} 
+                          style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
+                        >
+                          🗑 Supprimer
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
@@ -229,7 +268,7 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
           {a.nbRecuperations > 0 && (
             <div style={{ marginTop: 8, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>📦 RÉCUPÉRATIONS</span>
+                <span>📦 RÉCUPÉRATIONS MATINALES</span>
                 <span style={{ fontSize: 9, color: COLORS.orange }}>({a.nbRecuperations} récupérations)</span>
                 <span style={{ fontSize: 11, color: '#34d399', marginLeft: 'auto' }}>💰 {formatAr(a.totalRecuperations)}</span>
               </div>
@@ -266,11 +305,12 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={lbl()}>Motif de l'avance</label>
-          <input style={inp()} placeholder="Ex: Urgence familiale, Achat matériel..." value={avanceMotif} onChange={e => setAvanceMotif(e.target.value)} />
+          <input style={inp()} placeholder="Ex: Urgence familiale, Achat matériel, Soins médicaux..." value={avanceMotif} onChange={e => setAvanceMotif(e.target.value)} />
         </div>
         <button style={{ ...btn(COLORS.orange, '#d97706'), width: '100%', padding: 12 }} onClick={handleAddAvance}>+ Enregistrer l'avance</button>
       </div>
 
+      {/* Avances annulées */}
       {avances.filter(a => a.mois === selectedMonth && a.annule).length > 0 && (
         <div style={{ marginTop: 16 }}>
           <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 8 }}>Avances annulées</h2>

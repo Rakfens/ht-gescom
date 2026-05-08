@@ -37,8 +37,11 @@ export const getRecuperationsByDate = async (date) => {
 export const getRecuperationsByMonth = async (mois) => {
   // mois format: 'YYYY-MM'
   const { data, error } = await supabase.from('recuperations').select('*').ilike('date', `${mois}%`).order('date', { ascending: false });
-  if (error) throw error;
-  return data;
+  if (error) {
+    console.error('Erreur getRecuperationsByMonth:', error);
+    return [];
+  }
+  return data || [];
 };
 
 export const getRecuperationsByLivreur = async (livreurId, mois) => {
