@@ -8,6 +8,8 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const [avanceAgentId, setAvanceAgentId] = useState('');
   const [avanceMontant, setAvanceMontant] = useState('');
   const [avanceMotif, setAvanceMotif] = useState('');
+  const [editAvanceId, setEditAvanceId] = useState(null);
+  const [editAvanceData, setEditAvanceData] = useState({});
   const [recuperationsMois, setRecuperationsMois] = useState([]);
   const [loadingRecup, setLoadingRecup] = useState(false);
 
@@ -93,17 +95,28 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
     showToast('Avance ajoutée');
   };
 
-  const handleAnnulerAvance = async (id) => {
-    if (onAnnulerAvance) {
-      await onAnnulerAvance(id);
-      showToast('Avance annulée', 'warn');
+  const handleUpdateAvance = async () => {
+    if (editAvanceData.annule) {
+      // Si c'est une avance annulée, on ne peut pas la modifier
+      showToast('Cette avance est annulée, modification impossible', 'error');
+      return;
     }
+    await onAnnulerAvance(editAvanceId);
+    setEditAvanceId(null);
+    showToast('Avance annulée', 'warn');
   };
 
   const handleDeleteAvance = async (id) => {
-    if (onDeleteAvance) {
+    if (window.confirm('Supprimer définitivement cette avance ?')) {
       await onDeleteAvance(id);
       showToast('Avance supprimée', 'warn');
+    }
+  };
+
+  const handleCancelAvance = async (id) => {
+    if (window.confirm('Annuler cette avance ? Elle ne sera pas déduite du salaire')) {
+      await onAnnulerAvance(id);
+      showToast('Avance annulée', 'warn');
     }
   };
 
@@ -161,10 +174,62 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
             <span>💸 Frais: <b style={{ color: COLORS.orange }}>{formatAr(a.totalFrais)}</b></span>
           </div>
 
+          {/* Liste des avances avec motif et boutons */}
+          {a.avances.length > 0 && (
+            <div style={{ marginTop: 10, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.pink, marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📋 AVANCES SUR SALAIRE</span>
+                <span style={{ fontSize: 9, color: COLORS.orange }}>(déduites du salaire)</span>
+              </div>
+              {a.avances.map(av => (
+                <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 13 }}>{formatAr(parseFloat(av.montant || 0))}</span>
+                      {av.motif && (
+                        <span style={{ fontSize: 11, color: COLORS.subtle, background: COLORS.border, padding: '2px 10px', borderRadius: 15 }}>
+                          📝 {av.motif}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 10, color: COLORS.muted }}>📅 {av.date}</span>
+                      {av.annule && <span style={{ fontSize: 10, color: COLORS.red }}>⚠️ Annulée</span>}
+                    </div>
+                  </div>
+                  {!av.annule ? (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button 
+                        onClick={() => handleCancelAvance(av.id)} 
+                        style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
+                        title="Annuler cette avance (ne sera pas déduite)"
+                      >
+                        ❌ Annuler
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteAvance(av.id)} 
+                        style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
+                        title="Supprimer définitivement"
+                      >
+                        🗑 Supprimer
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => handleDeleteAvance(av.id)} 
+                      style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      🗑 Supprimer
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Récupérations du mois */}
           {a.nbRecuperations > 0 && (
             <div style={{ marginTop: 8, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>📦 RÉCUPÉRATIONS MATINALES</span>
+                <span>📦 RÉCUPÉRATIONS</span>
                 <span style={{ fontSize: 9, color: COLORS.orange }}>({a.nbRecuperations} récupérations)</span>
                 <span style={{ fontSize: 11, color: '#34d399', marginLeft: 'auto' }}>💰 {formatAr(a.totalRecuperations)}</span>
               </div>

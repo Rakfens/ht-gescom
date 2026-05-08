@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { formatAr, TODAY, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../utils/constants';
-import { btn, tag } from '../../utils/helpers';
-import { getRecuperationsByDate } from '../../services/recuperationService';
+import { formatAr, TODAY, currentMonth, monthLabel, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../utils/constants';
+import { btn, tag, inpSm } from '../../utils/helpers';
+import { getRecuperationsByMonth } from '../../services/recuperationService';
 
 export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [recuperationsJour, setRecuperationsJour] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth());
+  const [recuperationsMois, setRecuperationsMois] = useState([]);
   const [loadingRecup, setLoadingRecup] = useState(false);
-  
+
   const enCours = livraisons.filter(l => l.statut === 'en_cours').length;
   const todayLivs = livraisons.filter(l => l.date === TODAY());
   
@@ -21,13 +22,13 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
     parseFloat(l.frais || 0) > 0
   );
 
-  // Charger les récupérations du jour
+  // Charger les récupérations du mois sélectionné
   useEffect(() => {
     const loadRecuperations = async () => {
       setLoadingRecup(true);
       try {
-        const data = await getRecuperationsByDate(TODAY());
-        setRecuperationsJour(data || []);
+        const data = await getRecuperationsByMonth(selectedMonth);
+        setRecuperationsMois(data || []);
       } catch (error) {
         console.error('Erreur chargement récupérations:', error);
       } finally {
@@ -35,20 +36,24 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
       }
     };
     loadRecuperations();
-  }, []);
+  }, [selectedMonth]);
 
   // Calcul des totaux des récupérations
-  const totalRecuperationsJour = recuperationsJour.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
-  const nbRecuperationsJour = recuperationsJour.length;
+  const totalRecuperationsMois = recuperationsMois.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
+  const nbRecuperationsMois = recuperationsMois.length;
 
   // Regrouper par livreur pour les récupérations
-  const recuperationsParLivreur = recuperationsJour.reduce((acc, r) => {
+  const recuperationsParLivreur = recuperationsMois.reduce((acc, r) => {
     const nom = r.livreur_nom;
     if (!acc[nom]) acc[nom] = { livreur: nom, total: 0, nb: 0 };
     acc[nom].total += (r.frais_recuperation || 0);
     acc[nom].nb += 1;
     return acc;
   }, {});
+
+  const months = [...new Set(livraisons.map(l => l.date?.slice(0, 7)).filter(Boolean))];
+  months.push(currentMonth());
+  const uniqueMonths = [...new Set(months)].sort().reverse();
 
   // Détection mobile
   useEffect(() => {
@@ -61,7 +66,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 18 }}>Tableau de bord</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 18 }}>Tableau de bord</h1>
       
       {/* Cartes statistiques */}
       <div style={{ 
@@ -88,15 +93,21 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
         </div>
       </div>
 
-      {/* Carte Récupérations du jour */}
+      {/* Carte Récupérations du mois */}
       <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0b1120)', border: '1px solid #f59e0b', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, marginBottom: 4 }}>📦 RÉCUPÉRATIONS MATINALES — Aujourd'hui ({TODAY()})</div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9' }}>{formatAr(totalRecuperationsJour)}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{nbRecuperationsJour} récupération(s)</div>
+            <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, marginBottom: 4 }}>📦 RÉCUPÉRATIONS — {monthLabel(selectedMonth)}</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9' }}>{formatAr(totalRecuperationsMois)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{nbRecuperationsMois} récupération(s)</div>
           </div>
-          <button style={{ ...btn('#f59e0b', '#d97706'), padding: '10px 16px', fontSize: 12 }} onClick={() => onNavigate('recuperation')}>Voir détails →</button>
+          <select 
+            style={{ ...inpSm(), width: 'auto' }} 
+            value={selectedMonth} 
+            onChange={e => setSelectedMonth(e.target.value)}
+          >
+            {uniqueMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
+          </select>
         </div>
         
         {/* Détail par livreur */}
@@ -237,8 +248,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
                 return (
                   <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={tag('#1e3a5f', '#60a5fa')}>{a.nom}</span>
-                    </td>
+                      <span style={tag('#1e3a5f', '#60a5fa')}>{a.nom}</span></td>
                     <td style={{ padding: '10px 12px', fontWeight: 700 }}>{ls.length}</td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={tag('#14532d', 'var(--green)')}>{ls.filter(l => l.statut === 'livre').length}</span>
