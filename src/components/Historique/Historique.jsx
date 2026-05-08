@@ -24,7 +24,6 @@ export const Historique = ({ livraisons, agents, onUpdateLivraison, onDeleteLivr
   const statsByClient = useMemo(() => {
     const map = {};
     livsFiltered.forEach(l => {
-      // Regrouper par client donneur (celui qui nous confie le colis)
       const client = l.client_donneur;
       if (!map[client]) map[client] = { 
         client: client, 

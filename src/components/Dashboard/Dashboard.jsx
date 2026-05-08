@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { formatAr, TODAY, currentMonth, monthLabel, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../utils/constants';
 import { btn, tag, inpSm } from '../../utils/helpers';
-import { getRecuperationsByDate } from '../../services/recuperationService';
+import { getRecuperationsByMonth } from '../../services/recuperationService';
 
 export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);

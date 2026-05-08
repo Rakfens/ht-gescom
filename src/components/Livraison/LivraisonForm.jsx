@@ -5,8 +5,8 @@ import { inp, btn, lbl } from '../../utils/helpers';
 export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }) => {
   const [form, setForm] = useState({
     colis: '',
-    client_donneur: '',      // Le vendeur qui nous confie le colis (SANS TÉLÉPHONE)
-    destinataire: '',         // L'acheteur qui reçoit le colis
+    client_donneur: '',
+    destinataire: '',
     destinataire_telephone: '',
     destinataire_lieu: '',
     agentId: '',
@@ -86,7 +86,7 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
             </div>
           </div>
 
-          {/* Client donneur (celui qui nous confie le colis) - SANS TÉLÉPHONE */}
+          {/* Client donneur (celui qui nous confie le colis) */}
           <div style={{ background: '#1e3a5f', borderRadius: 10, padding: 12, marginBottom: 4 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>🏪</span> CLIENT DONNEUR (nous confie le colis)

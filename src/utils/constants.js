@@ -18,8 +18,7 @@ export const STATUTS = {
   en_cours: { label: 'En cours', color: '#f59e0b', bg: '#451a03' },
   livre: { label: 'Livré', color: '#34d399', bg: '#14532d' },
   retourne: { label: 'Retourné', color: '#f87171', bg: '#450a0a' },
-  reporte: { label: 'Reporté', color: '#a78bfa', bg: '#2e1065' },
-  province: { label: 'Province', color: '#38bdf8', bg: '#0c4a6e' },
+  reporte: { label: 'Reporté', color: '#a78bfa', bg: '#2e1065' }
 };
 
 // ==================== MODES DE PAIEMENT ====================
@@ -55,7 +54,7 @@ export const COMMISSION_DEFAUT = 500;
 
 // ==================== COMMISSION GÉRANT ====================
 // Clients exclus de la commission (le gérant ne gagne rien pour ces clients)
-export const EXCLUDED_CLIENTS = ['POMANAY', 'ATERINAY'];
+export const EXCLUDED_CLIENTS = ['POMANAY', 'ZAZATIANA'];
 
 // Fonction pour déterminer si le gérant doit recevoir une commission
 // Le gérant gagne sa commission si :

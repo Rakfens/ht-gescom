@@ -9,7 +9,7 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
   const [gerantDate, setGerantDate] = useState(TODAY());
   const [gerantMonth, setGerantMonth] = useState(CURRENT_MONTH());
 
-  // Commission uniquement pour les clients non exclus
+  // Commission sur TOUTES les livraisons où les frais ont été payés (frais > 0)
   const livsGerant = (arr) => arr.filter(l => shouldCountGerantCommission(l));
   
   const gerantDayLivs = useMemo(() => livsGerant(livraisons.filter(l => l.date === gerantDate)), [livraisons, gerantDate]);
@@ -37,6 +37,7 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
   const gerantMonthCount = gerantMonthLivs.length;
   const gerantMonthGain = gerantMonthCount * commissionGerant;
   const gerantMonthFrais = gerantMonthLivs.reduce((s, l) => s + parseFloat(l.frais || 0), 0);
+
   const gerantMonthByDay = useMemo(() => {
     const map = {};
     gerantMonthLivs.forEach(l => {
@@ -57,10 +58,10 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 6 }}>🧑‍💼 Gérant</h1>
       <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 18 }}>
-        Commission : {formatAr(commissionGerant)} par livraison 
-        <span style={{ display: 'block', fontSize: 11, color: COLORS.orange, marginTop: 4 }}>
+        Commission : {formatAr(commissionGerant)} par livraison (dès que les frais sont payés)
+        <div style={{ fontSize: 11, color: COLORS.orange, marginTop: 4 }}>
           ⚠️ Clients exclus : {EXCLUDED_CLIENTS.join(', ')} (pas de commission)
-        </span>
+        </div>
       </div>
       
       <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border2, borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
@@ -81,7 +82,7 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
             )}
           </div>
           <div style={{ fontSize: 12, color: COLORS.muted, textAlign: 'right' }}>
-            <div>💰 Commission sur TOUTES les livraisons</div>
+            <div>💰 Commission sur toutes les livraisons</div>
             <div style={{ fontSize: 11 }}>Dès que les frais sont payés (montant &gt; 0)</div>
             <div style={{ fontSize: 11 }}>⚠️ Sauf pour les clients : {EXCLUDED_CLIENTS.join(', ')}</div>
           </div>
@@ -125,7 +126,7 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
             </div>
             <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, padding: '14px 16px' }}>
               <div style={{ fontSize: 17, fontWeight: 800, color: COLORS.orange, marginBottom: 3 }}>{formatAr(gerantDayFraisTotal)}</div>
-              <div style={{ fontSize: 11, color: COLORS.muted }}>Frais collectés (clients non exclus)</div>
+              <div style={{ fontSize: 11, color: COLORS.muted }}>Frais collectés</div>
             </div>
             <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, padding: '14px 16px' }}>
               <div style={{ fontSize: 17, fontWeight: 800, color: gerantDayNet >= 0 ? COLORS.green : COLORS.red, marginBottom: 3 }}>{formatAr(gerantDayNet)}</div>
@@ -140,12 +141,12 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 550 }}>
                   <thead>
                     <tr style={{ background: COLORS.card }}>
-                      <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>#</th>
-                      <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Colis</th>
-                      <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Client donneur</th>
-                      <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Destinataire</th>
-                      <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Agent</th>
-                      <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Statut</th>
+                      <th style={{ padding: '10px 12px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>#</th>
+                      <th style={{ padding: '10px 12px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Colis</th>
+                      <th style={{ padding: '10px 12px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Client donneur</th>
+                      <th style={{ padding: '10px 12px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Destinataire</th>
+                      <th style={{ padding: '10px 12px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Agent</th>
+                      <th style={{ padding: '10px 12px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Statut</th>
                       <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'right', fontSize: 11 }}>Frais</th>
                       <th style={{ padding: '10px 12px', color: COLORS.muted, textAlign: 'right', fontSize: 11 }}>Commission</th>
                     </tr>
@@ -211,8 +212,8 @@ export const Gerant = ({ livraisons, commissionGerant, onUpdateCommission, showT
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 320 }}>
                   <thead>
                     <tr style={{ background: COLORS.card }}>
-                      <th style={{ padding: '10px 14px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Date</th>
-                      <th style={{ padding: '10px 14px', color: COLORS.muted, textAlign: 'left', fontSize: 11 }}>Livraisons avec commission</th>
+                      <th style={{ padding: '10px 14px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Date</th>
+                      <th style={{ padding: '10px 14px', color: COLORS.muted, fontWeight: 700, textAlign: 'left', fontSize: 11 }}>Livraisons avec commission</th>
                       <th style={{ padding: '10px 14px', color: COLORS.muted, textAlign: 'right', fontSize: 11 }}>Gain gérant</th>
                     </tr>
                   </thead>

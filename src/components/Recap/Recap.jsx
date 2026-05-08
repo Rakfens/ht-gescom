@@ -1,12 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { COLORS, formatAr, currentMonth, monthLabel, shouldCountGerantCommission } from '../../utils/constants';
 import { btn, inpSm, lbl, tag, inp } from '../../utils/helpers';
+import { getRecuperationsByMonth } from '../../services/recuperationService';
 
 export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvance, onDeleteAvance, showToast }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [avanceAgentId, setAvanceAgentId] = useState('');
   const [avanceMontant, setAvanceMontant] = useState('');
   const [avanceMotif, setAvanceMotif] = useState('');
+  const [recuperationsMois, setRecuperationsMois] = useState([]);
+  const [loadingRecup, setLoadingRecup] = useState(false);
 
   const months = useMemo(() => {
     const s = new Set(livraisons.map(l => l.date?.slice(0, 7)).filter(Boolean));
@@ -17,24 +20,44 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const monthLivs = useMemo(() => livraisons.filter(l => l.date && l.date.startsWith(selectedMonth)), [livraisons, selectedMonth]);
   const monthAvances = useMemo(() => avances.filter(a => a.mois === selectedMonth && !a.annule), [avances, selectedMonth]);
 
+  // Charger les récupérations du mois sélectionné
+  useEffect(() => {
+    const loadRecuperations = async () => {
+      setLoadingRecup(true);
+      try {
+        const data = await getRecuperationsByMonth(selectedMonth);
+        setRecuperationsMois(data || []);
+      } catch (error) {
+        console.error('Erreur chargement récupérations:', error);
+      } finally {
+        setLoadingRecup(false);
+      }
+    };
+    loadRecuperations();
+  }, [selectedMonth]);
+
   const livsGerant = (arr) => arr.filter(l => shouldCountGerantCommission(l));
 
   const monthStatsByAgent = useMemo(() => agents.map(ag => {
     const ls = monthLivs.filter(l => l.agent_id === ag.id);
     const av = monthAvances.filter(a => a.agent_id === ag.id);
+    const recups = recuperationsMois.filter(r => r.livreur_id === ag.id);
+    const totalRecuperations = recups.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
     return {
       ...ag,
       nbLivs: ls.length,
       nbLivres: ls.filter(l => l.statut === 'livre').length,
       nbRetours: ls.filter(l => l.statut === 'retourne').length,
       nbReportes: ls.filter(l => l.statut === 'reporte').length,
-      nbProvince: ls.filter(l => l.statut === 'province').length,
       totalFrais: ls.reduce((s, l) => s + parseFloat(l.frais || 0), 0),
       totalAvances: av.reduce((s, a) => s + parseFloat(a.montant || 0), 0),
       netSalaire: parseFloat(ag.salaire || 0) - av.reduce((s, a) => s + parseFloat(a.montant || 0), 0),
-      avances: av
+      avances: av,
+      recuperations: recups,
+      totalRecuperations: totalRecuperations,
+      nbRecuperations: recups.length
     };
-  }), [agents, monthLivs, monthAvances]);
+  }), [agents, monthLivs, monthAvances, recuperationsMois]);
 
   const monthTotalMontant = monthLivs
     .filter(l => l.paiement !== 'client')
@@ -43,7 +66,8 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const monthTotalFrais = monthLivs.reduce((s, l) => s + parseFloat(l.frais || 0), 0);
   const monthTotalSalaires = monthStatsByAgent.reduce((s, a) => s + parseFloat(a.salaire || 0), 0);
   const monthGerantGain = livsGerant(monthLivs).length * commissionGerant;
-  const monthBenefice = monthTotalFrais - monthTotalSalaires - monthGerantGain;
+  const monthTotalRecuperations = monthStatsByAgent.reduce((s, a) => s + a.totalRecuperations, 0);
+  const monthBenefice = monthTotalFrais - monthTotalSalaires - monthGerantGain - monthTotalRecuperations;
 
   const handleAddAvance = async () => {
     if (!avanceAgentId || !avanceMontant) {
@@ -88,13 +112,14 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         <div>
           <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 4 }}>BÉNÉFICE NET — {monthLabel(selectedMonth)}</div>
           <div style={{ fontSize: 30, fontWeight: 900, color: monthBenefice >= 0 ? COLORS.green : COLORS.red }}>{formatAr(monthBenefice)}</div>
-          <div style={{ fontSize: 11, color: COLORS.muted }}>Frais − Salaires − Commission gérant</div>
+          <div style={{ fontSize: 11, color: COLORS.muted }}>Frais − Salaires − Commission − Récupérations</div>
         </div>
         <div style={{ fontSize: 12, color: COLORS.muted, textAlign: 'right' }}>
           <div>Montant colis: <b style={{ color: COLORS.green }}>{formatAr(monthTotalMontant)}</b></div>
           <div>Frais collectés: <b style={{ color: COLORS.orange }}>{formatAr(monthTotalFrais)}</b></div>
           <div>Salaires agents: <b style={{ color: COLORS.red }}>{formatAr(monthTotalSalaires)}</b></div>
           <div>Commission gérant: <b style={{ color: COLORS.pink }}>{formatAr(monthGerantGain)}</b></div>
+          <div>Récupérations: <b style={{ color: '#f59e0b' }}>{formatAr(monthTotalRecuperations)}</b></div>
           <div>{monthLivs.length} livraisons</div>
         </div>
       </div>
@@ -124,11 +149,10 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
             <span>✅ Livrés: <b style={{ color: COLORS.green }}>{a.nbLivres}</b></span>
             <span>↩️ Retournés: <b style={{ color: COLORS.red }}>{a.nbRetours}</b></span>
             <span>⏳ Reportés: <b style={{ color: COLORS.purple }}>{a.nbReportes}</b></span>
-            <span>🚛 Province: <b style={{ color: COLORS.teal }}>{a.nbProvince}</b></span>
             <span>💸 Frais: <b style={{ color: COLORS.orange }}>{formatAr(a.totalFrais)}</b></span>
           </div>
 
-          {/* Liste des avances avec bouton Supprimer uniquement */}
+          {/* Liste des avances avec bouton Supprimer */}
           {a.avances.length > 0 && (
             <div style={{ marginTop: 10, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.pink, marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -136,8 +160,8 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
                 <span style={{ fontSize: 9, color: COLORS.orange }}>(déduites du salaire)</span>
               </div>
               {a.avances.map(av => (
-                <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 13 }}>{formatAr(parseFloat(av.montant || 0))}</span>
                       {av.motif && (
@@ -147,13 +171,35 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
                       )}
                       <span style={{ fontSize: 10, color: COLORS.muted }}>📅 {av.date}</span>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteAvance(av.id)} 
-                      style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
-                      title="Supprimer cette avance"
-                    >
-                      🗑 Supprimer
-                    </button>
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteAvance(av.id)} 
+                    style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
+                    title="Supprimer cette avance"
+                  >
+                    🗑 Supprimer
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Récupérations du mois */}
+          {a.nbRecuperations > 0 && (
+            <div style={{ marginTop: 8, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📦 RÉCUPÉRATIONS MATINALES</span>
+                <span style={{ fontSize: 9, color: COLORS.orange }}>({a.nbRecuperations} récupérations)</span>
+                <span style={{ fontSize: 11, color: '#34d399', marginLeft: 'auto' }}>💰 {formatAr(a.totalRecuperations)}</span>
+              </div>
+              {a.recuperations.map(rec => (
+                <div key={rec.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '6px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <div>
+                    <span style={{ fontSize: 11, color: '#f59e0b' }}>🏪 {rec.client_donneur}</span>
+                    <span style={{ fontSize: 10, color: COLORS.muted, marginLeft: 10 }}>📅 {rec.date}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: COLORS.green, fontWeight: 600 }}>{formatAr(rec.frais_recuperation)}</span>
                   </div>
                 </div>
               ))}
@@ -183,6 +229,22 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         </div>
         <button style={{ ...btn(COLORS.orange, '#d97706'), width: '100%', padding: 12 }} onClick={handleAddAvance}>+ Enregistrer l'avance</button>
       </div>
+
+      {/* Avances annulées */}
+      {avances.filter(a => a.mois === selectedMonth && a.annule).length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 8 }}>Avances annulées</h2>
+          {avances.filter(a => a.mois === selectedMonth && a.annule).map(av => (
+            <div key={av.id} style={{ background: COLORS.bg, border: '1px solid ' + COLORS.border, borderRadius: 8, padding: '8px 14px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, opacity: 0.6 }}>
+              <div>
+                <span style={{ color: COLORS.muted, textDecoration: 'line-through' }}>{av.agent_nom} — {formatAr(parseFloat(av.montant || 0))}</span>
+                {av.motif && <span style={{ fontSize: 11, color: COLORS.muted, marginLeft: 8 }}>({av.motif})</span>}
+              </div>
+              <button onClick={() => handleDeleteAvance(av.id)} style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 8px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}>🗑 Définitivement</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
