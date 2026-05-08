@@ -1,4 +1,3 @@
-import { supabase } from '../supabaseClient';
 import { formatAr, STATUTS } from './constants';
 
 export const generateClientPDF = (client, livraisons, recuperation, province, logoUrlParam) => {
@@ -6,7 +5,8 @@ export const generateClientPDF = (client, livraisons, recuperation, province, lo
   const w = window.open('', '_blank');
   if (!w) { alert('Autorisez les popups'); return; }
   
-  const logoUrl = logoUrlParam || '';
+  // Utiliser le logo du dossier public par défaut
+  const logoUrl = '/logo.png';
   
   const livreesFacturees = livraisons.filter(l => l.statut === 'livre' && l.paiement !== 'client');
   const totalMontant = livreesFacturees.reduce((s, l) => s + parseFloat(l.montant || 0), 0);
@@ -71,7 +71,7 @@ export const generateClientPDF = (client, livraisons, recuperation, province, lo
   </head>
   <body>
     <div class="header">
-      ${logoUrl ? `<img src="${logoUrl}" class="logo" onerror="this.style.display='none'">` : '<div>📦</div>'}
+      <img src="${logoUrl}" class="logo" onerror="this.style.display='none'">
       <div class="title">ATERINAY SERVICES</div>
       <div class="subtitle">Relevé de livraisons</div>
     </div>
@@ -95,46 +95,12 @@ export const generateClientPDF = (client, livraisons, recuperation, province, lo
   setTimeout(() => w.print(), 500);
 };
 
-export const printAgentList = async (agent, livraisons, date, logoUrlParam) => {
+export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
   const w = window.open('', '_blank');
   if (!w) return;
   
-  // Récupérer le logo depuis localStorage ou utiliser le paramètre
-  let logoUrl = logoUrlParam || '';
-  
-  // Si pas de logo en paramètre, essayer localStorage
-  if (!logoUrl) {
-    try {
-      const savedLogo = localStorage.getItem('aterinay_logo_url');
-      if (savedLogo && savedLogo !== 'null' && savedLogo !== 'undefined') {
-        logoUrl = savedLogo;
-      }
-    } catch (e) {
-      console.error('Erreur récupération logo localStorage:', e);
-    }
-  }
-  
-  // Si toujours pas de logo, essayer depuis la table config via API
-  if (!logoUrl) {
-    try {
-      const { data, error } = await supabase
-        .from('config')
-        .select('valeur')
-        .eq('cle', 'logo_url')
-        .single();
-      if (!error && data?.valeur) {
-        logoUrl = data.valeur;
-        localStorage.setItem('aterinay_logo_url', logoUrl);
-      }
-    } catch (e) {
-      console.error('Erreur API logo:', e);
-    }
-  }
-  
-  // Fallback final : logo par défaut
-  if (!logoUrl) {
-    logoUrl = '/logo.png';
-  }
+  // Logo depuis le dossier public
+  const logoUrl = '/logo.png';
   
   // Regrouper par DESTINATAIRE
   const destinatairesMap = {};
