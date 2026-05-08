@@ -35,8 +35,12 @@ export const getRecuperationsByDate = async (date) => {
 };
 
 export const getRecuperationsByMonth = async (mois) => {
-  // mois format: 'YYYY-MM'
+  // Pour debug : afficher le mois recherché
+  console.log('Recherche récupérations pour le mois:', mois);
+  
   const { data, error } = await supabase.from('recuperations').select('*').ilike('date', `${mois}%`).order('date', { ascending: false });
+  
+  console.log('Récupérations trouvées:', data?.length || 0);
   if (error) {
     console.error('Erreur getRecuperationsByMonth:', error);
     return [];
@@ -45,11 +49,15 @@ export const getRecuperationsByMonth = async (mois) => {
 };
 
 export const getRecuperationsByLivreur = async (livreurId, mois) => {
+  console.log('Recherche pour livreur:', livreurId, 'mois:', mois);
+  
   let query = supabase.from('recuperations').select('*').eq('livreur_id', livreurId);
   if (mois) {
     query = query.ilike('date', `${mois}%`);
   }
   const { data, error } = await query.order('date', { ascending: false });
+  
+  console.log('Récupérations trouvées pour livreur:', data?.length || 0);
   if (error) throw error;
-  return data;
+  return data || [];
 };
