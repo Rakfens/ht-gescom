@@ -10,32 +10,41 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
   const [editAgentData, setEditAgentData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [recuperationsAgent, setRecuperationsAgent] = useState({});
+  const [refreshKey, setRefreshKey] = useState(0); // Pour forcer le rechargement
 
   const months = [...new Set([...agents.map(() => currentMonth()), currentMonth()])].sort().reverse();
   const uniqueMonths = [...new Set(months)];
 
-  // Charger les récupérations pour chaque agent
-  useEffect(() => {
-    const loadAllRecuperations = async () => {
-      const recupsMap = {};
-      for (const agent of agents) {
-        try {
-          const data = await getRecuperationsByLivreur(agent.id, selectedMonth);
-          recupsMap[agent.id] = {
-            total: data.reduce((s, r) => s + (r.frais_recuperation || 0), 0),
-            count: data.length
-          };
-        } catch (error) {
-          console.error('Erreur chargement récupérations:', error);
-          recupsMap[agent.id] = { total: 0, count: 0 };
-        }
+  // Fonction pour charger les récupérations
+  const loadAllRecuperations = async () => {
+    console.log('=== CHARGEMENT RÉCUPÉRATIONS ===');
+    console.log('Mois sélectionné:', selectedMonth);
+    console.log('Agents:', agents);
+    
+    const recupsMap = {};
+    for (const agent of agents) {
+      try {
+        const data = await getRecuperationsByLivreur(agent.id, selectedMonth);
+        console.log(`Agent ${agent.nom} (${agent.id}): ${data.length} récupérations`, data);
+        recupsMap[agent.id] = {
+          total: data.reduce((s, r) => s + (parseFloat(r.frais_recuperation) || 0), 0),
+          count: data.length
+        };
+      } catch (error) {
+        console.error(`Erreur pour agent ${agent.id}:`, error);
+        recupsMap[agent.id] = { total: 0, count: 0 };
       }
-      setRecuperationsAgent(recupsMap);
-    };
+    }
+    console.log('Résultat final:', recupsMap);
+    setRecuperationsAgent(recupsMap);
+  };
+
+  // Charger au montage et quand les dépendances changent
+  useEffect(() => {
     if (agents.length > 0) {
       loadAllRecuperations();
     }
-  }, [agents, selectedMonth]);
+  }, [agents, selectedMonth, refreshKey]);
 
   const handleAddAgent = async () => {
     if (!newAgentNom.trim() || !newAgentSalaire) {
@@ -46,6 +55,7 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     setNewAgentNom('');
     setNewAgentSalaire('');
     showToast('Agent ajouté');
+    setRefreshKey(prev => prev + 1); // Rafraîchir
   };
 
   const handleUpdateAgent = async () => {
@@ -53,12 +63,14 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     await onUpdateAgent(editAgentId, { nom: editAgentData.nom, salaire: parseFloat(editAgentData.salaire) });
     setEditAgentId(null);
     showToast('Agent modifié');
+    setRefreshKey(prev => prev + 1); // Rafraîchir
   };
 
   const handleDeleteAgent = async (id) => {
     if (window.confirm('Supprimer cet agent ?')) {
       await onDeleteAgent(id);
       showToast('Agent supprimé', 'warn');
+      setRefreshKey(prev => prev + 1); // Rafraîchir
     }
   };
 
@@ -67,7 +79,7 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
       <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 18 }}>Gestion des agents</h1>
       
       {/* Sélecteur de mois pour les récupérations */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
         <div style={{ background: COLORS.card, padding: '8px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations du mois :</span>
           <select 
@@ -78,6 +90,14 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
             {uniqueMonths.map(m => <option key={m} value={m}>{monthLabel(m)}</option>)}
           </select>
         </div>
+        
+        {/* Bouton de rafraîchissement */}
+        <button 
+          onClick={() => setRefreshKey(prev => prev + 1)}
+          style={{ background: '#334155', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#fff', fontSize: 12, cursor: 'pointer' }}
+        >
+          🔄 Rafraîchir
+        </button>
       </div>
 
       {/* Formulaire ajout agent */}
@@ -137,25 +157,26 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
                   </div>
                 </div>
 
-                {/* Récapitulatif des récupérations (simplifié) */}
-                {recups.count > 0 ? (
-                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid ' + COLORS.border }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations</span>
-                        <span style={{ fontSize: 11, color: COLORS.muted }}>({monthLabel(selectedMonth)})</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 11, color: '#f59e0b' }}>{recups.count} récup.</span>
-                        <span style={{ fontSize: 13, color: '#34d399', fontWeight: 700 }}>💰 {formatAr(recups.total)}</span>
-                      </div>
+                {/* Récapitulatif des récupérations */}
+                <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid ' + COLORS.border }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations</span>
+                      <span style={{ fontSize: 11, color: COLORS.muted }}>({monthLabel(selectedMonth)})</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 11, color: '#f59e0b' }}>{recups.count} récup.</span>
+                      <span style={{ fontSize: 13, color: '#34d399', fontWeight: 700 }}>💰 {formatAr(recups.total)}</span>
                     </div>
                   </div>
-                ) : (
-                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid ' + COLORS.border, fontSize: 11, color: COLORS.muted, textAlign: 'center' }}>
-                    Aucune récupération ce mois-ci
-                  </div>
-                )}
+                  
+                  {/* Ajout d'un message si aucune donnée */}
+                  {recups.count === 0 && (
+                    <div style={{ fontSize: 11, color: COLORS.muted, textAlign: 'center', marginTop: 8 }}>
+                      Aucune récupération pour ce mois
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
