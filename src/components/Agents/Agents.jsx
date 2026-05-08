@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { COLORS, formatAr, currentMonth, monthLabel } from '../../utils/constants';
 import { btn, inp, inpSm, lbl } from '../../utils/helpers';
-import { getRecuperationsByLivreur } from '../../services/recuperationService';
+import { getRecuperationsByLivreur, getAllRecuperationsByLivreur } from '../../services/recuperationService';
 
 export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showToast }) => {
   const [newAgentNom, setNewAgentNom] = useState('');
@@ -10,41 +10,52 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
   const [editAgentData, setEditAgentData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [recuperationsAgent, setRecuperationsAgent] = useState({});
-  const [refreshKey, setRefreshKey] = useState(0); // Pour forcer le rechargement
+  const [loading, setLoading] = useState(false);
 
   const months = [...new Set([...agents.map(() => currentMonth()), currentMonth()])].sort().reverse();
   const uniqueMonths = [...new Set(months)];
 
   // Fonction pour charger les récupérations
   const loadAllRecuperations = async () => {
-    console.log('=== CHARGEMENT RÉCUPÉRATIONS ===');
+    if (!agents.length) return;
+    
+    setLoading(true);
+    console.log('=== CHARGEMENT DES RÉCUPÉRATIONS ===');
     console.log('Mois sélectionné:', selectedMonth);
-    console.log('Agents:', agents);
+    console.log('Nombre d\'agents:', agents.length);
     
     const recupsMap = {};
+    
     for (const agent of agents) {
       try {
+        console.log(`\n--- Chargement pour: ${agent.nom} (ID: ${agent.id}) ---`);
+        
         const data = await getRecuperationsByLivreur(agent.id, selectedMonth);
-        console.log(`Agent ${agent.nom} (${agent.id}): ${data.length} récupérations`, data);
+        
         recupsMap[agent.id] = {
           total: data.reduce((s, r) => s + (parseFloat(r.frais_recuperation) || 0), 0),
-          count: data.length
+          count: data.length,
+          details: data
         };
+        
+        console.log(`Résultat pour ${agent.nom}: ${data.length} récupération(s), total: ${recupsMap[agent.id].total}`);
+        
       } catch (error) {
         console.error(`Erreur pour agent ${agent.id}:`, error);
-        recupsMap[agent.id] = { total: 0, count: 0 };
+        recupsMap[agent.id] = { total: 0, count: 0, details: [] };
       }
     }
-    console.log('Résultat final:', recupsMap);
+    
+    console.log('\n=== RÉCAPITULATIF FINAL ===');
+    console.log(recupsMap);
     setRecuperationsAgent(recupsMap);
+    setLoading(false);
   };
 
   // Charger au montage et quand les dépendances changent
   useEffect(() => {
-    if (agents.length > 0) {
-      loadAllRecuperations();
-    }
-  }, [agents, selectedMonth, refreshKey]);
+    loadAllRecuperations();
+  }, [agents, selectedMonth]);
 
   const handleAddAgent = async () => {
     if (!newAgentNom.trim() || !newAgentSalaire) {
@@ -55,7 +66,6 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     setNewAgentNom('');
     setNewAgentSalaire('');
     showToast('Agent ajouté');
-    setRefreshKey(prev => prev + 1); // Rafraîchir
   };
 
   const handleUpdateAgent = async () => {
@@ -63,14 +73,12 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     await onUpdateAgent(editAgentId, { nom: editAgentData.nom, salaire: parseFloat(editAgentData.salaire) });
     setEditAgentId(null);
     showToast('Agent modifié');
-    setRefreshKey(prev => prev + 1); // Rafraîchir
   };
 
   const handleDeleteAgent = async (id) => {
     if (window.confirm('Supprimer cet agent ?')) {
       await onDeleteAgent(id);
       showToast('Agent supprimé', 'warn');
-      setRefreshKey(prev => prev + 1); // Rafraîchir
     }
   };
 
@@ -78,8 +86,8 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 18 }}>Gestion des agents</h1>
       
-      {/* Sélecteur de mois pour les récupérations */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+      {/* Sélecteur de mois et boutons */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ background: COLORS.card, padding: '8px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations du mois :</span>
           <select 
@@ -91,14 +99,20 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
           </select>
         </div>
         
-        {/* Bouton de rafraîchissement */}
         <button 
-          onClick={() => setRefreshKey(prev => prev + 1)}
-          style={{ background: '#334155', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#fff', fontSize: 12, cursor: 'pointer' }}
+          onClick={() => loadAllRecuperations()}
+          style={{ background: '#f59e0b', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#000', fontSize: 12, cursor: 'pointer' }}
         >
           🔄 Rafraîchir
         </button>
       </div>
+
+      {/* Indicateur de chargement */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 20, color: COLORS.muted }}>
+          Chargement des récupérations...
+        </div>
+      )}
 
       {/* Formulaire ajout agent */}
       <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border2, borderRadius: 14, padding: 18, marginBottom: 20 }}>
@@ -117,13 +131,15 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
       </div>
 
       {/* Liste des agents */}
-      <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 12 }}>Liste ({agents.length})</h2>
+      <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 12 }}>
+        Liste ({agents.length})
+      </h2>
+      
       {agents.map(a => {
         const recups = recuperationsAgent[a.id] || { total: 0, count: 0 };
         return (
           <div key={a.id} style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
             {editAgentId === a.id ? (
-              // Mode édition
               <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                   <div>
@@ -141,7 +157,6 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
                 </div>
               </div>
             ) : (
-              // Mode affichage
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'linear-gradient(135deg,#1e40af,#1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, color: '#fff', flexShrink: 0 }}>
@@ -170,8 +185,7 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
                     </div>
                   </div>
                   
-                  {/* Ajout d'un message si aucune donnée */}
-                  {recups.count === 0 && (
+                  {recups.count === 0 && !loading && (
                     <div style={{ fontSize: 11, color: COLORS.muted, textAlign: 'center', marginTop: 8 }}>
                       Aucune récupération pour ce mois
                     </div>
