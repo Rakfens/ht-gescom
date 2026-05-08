@@ -100,59 +100,60 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
   
   const logoUrl = logoUrlParam || '';
   
-  // Regrouper par CLIENT DONNEUR (pas par destinataire)
-  const clientsMap = {};
+  // Regrouper par DESTINATAIRE (client qui reçoit le colis)
+  const destinatairesMap = {};
   let grandTotalMontant = 0;
   let grandTotalFrais = 0;
   
   for (const l of livraisons) {
-    const clientDonneur = l.client_donneur;
+    const destinataire = l.destinataire;
     const montant = l.paiement === 'client' ? 0 : parseFloat(l.montant || 0);
     const frais = parseFloat(l.frais || 0);
     
     grandTotalMontant += montant;
     grandTotalFrais += frais;
     
-    if (!clientsMap[clientDonneur]) {
-      clientsMap[clientDonneur] = {
-        client: clientDonneur,
+    if (!destinatairesMap[destinataire]) {
+      destinatairesMap[destinataire] = {
+        destinataire: destinataire,
+        telephone: l.destinataire_telephone || '',
+        lieu: l.destinataire_lieu || '',
         livraisons: [],
         totalMontant: 0,
         totalFrais: 0,
         totalGeneral: 0
       };
     }
-    clientsMap[clientDonneur].livraisons.push(l);
-    clientsMap[clientDonneur].totalMontant += montant;
-    clientsMap[clientDonneur].totalFrais += frais;
-    clientsMap[clientDonneur].totalGeneral += (montant + frais);
+    destinatairesMap[destinataire].livraisons.push(l);
+    destinatairesMap[destinataire].totalMontant += montant;
+    destinatairesMap[destinataire].totalFrais += frais;
+    destinatairesMap[destinataire].totalGeneral += (montant + frais);
   }
   
   let clientsHtml = '';
-  let clientNum = 1;
+  let destinataireNum = 1;
   
-  for (const client in clientsMap) {
-    const data = clientsMap[client];
+  for (const destinataire in destinatairesMap) {
+    const data = destinatairesMap[destinataire];
     
     clientsHtml += `<div class="client-card">`;
-    clientsHtml += `<div class="client-header">🏪 CLIENT ${clientNum} : ${client}</div>`;
+    clientsHtml += `<div class="client-header">🚚 DESTINATAIRE ${destinataireNum} : ${data.destinataire}`;
+    if (data.telephone) clientsHtml += `<div class="client-phone">📞 ${data.telephone}</div>`;
+    if (data.lieu) clientsHtml += `<div class="client-lieu">📍 ${data.lieu}</div>`;
+    clientsHtml += `</div>`;
     clientsHtml += `<div class="client-livraisons">`;
     
-    // Liste des livraisons pour ce client donneur
+    // Liste des livraisons pour ce destinataire
     for (let i = 0; i < data.livraisons.length; i++) {
       const l = data.livraisons[i];
       const montant = l.paiement === 'client' ? 0 : parseFloat(l.montant || 0);
       const frais = parseFloat(l.frais || 0);
       const statut = STATUTS[l.statut]?.label || l.statut;
-      const destinataireTel = l.destinataire_telephone ? ` 📞 ${l.destinataire_telephone}` : '';
       
       clientsHtml += `
         <div class="liv-item">
           <div class="liv-title">📦 ${i+1}. ${l.colis}</div>
-          <div class="liv-dest">
-            🚚 ${l.destinataire || '-'}${destinataireTel}
-            ${l.destinataire_lieu ? `<br>📍 ${l.destinataire_lieu}` : ''}
-          </div>
+          <div class="liv-row"><span>🏪 Client donneur :</span><span>${l.client_donneur || '-'}</span></div>
           <div class="liv-row"><span>💰 Montant :</span><span>${l.paiement === 'client' ? 'Payé client' : formatAr(montant)}</span></div>
           <div class="liv-row"><span>🚚 Frais :</span><span>${formatAr(frais)}</span></div>
           <div class="liv-row"><span>📊 Statut :</span><span>${statut}</span></div>
@@ -160,13 +161,13 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
       `;
     }
     
-    // Total pour ce client donneur (montant + frais)
+    // Total pour ce destinataire (montant + frais)
     clientsHtml += `<div class="client-total">`;
     clientsHtml += `<div class="total-line">💰 TOTAL MONTANT : ${formatAr(data.totalMontant)}</div>`;
     clientsHtml += `<div class="total-line">🚚 TOTAL FRAIS : ${formatAr(data.totalFrais)}</div>`;
-    clientsHtml += `<div class="total-line grand">💵 TOTAL CLIENT (Montant + Frais) : ${formatAr(data.totalGeneral)}</div>`;
+    clientsHtml += `<div class="total-line grand">💵 TOTAL À PAYER PAR LE DESTINATAIRE : ${formatAr(data.totalGeneral)}</div>`;
     clientsHtml += `</div></div>`;
-    clientNum++;
+    destinataireNum++;
   }
   
   const grandTotalGeneral = grandTotalMontant + grandTotalFrais;
@@ -185,10 +186,11 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
       .subtitle{font-size:9px}
       .client-card{border:1px solid #000;margin-bottom:8px;background:#fff}
       .client-header{background:#000;color:#fff;padding:5px;text-align:center;font-weight:bold;font-size:10px}
+      .client-phone{font-size:8px;margin-top:2px;opacity:0.8}
+      .client-lieu{font-size:8px;margin-top:2px;opacity:0.8}
       .client-livraisons{padding:5px}
       .liv-item{border-bottom:1px solid #ccc;padding:5px 0;margin-bottom:5px}
       .liv-title{font-weight:bold;font-size:10px;margin-bottom:3px}
-      .liv-dest{font-size:9px;color:#444;margin-bottom:4px}
       .liv-row{display:flex;justify-content:space-between;font-size:9px;margin:2px 0}
       .client-total{background:#f0f0f0;padding:5px;border-top:1px solid #ccc}
       .total-line{display:flex;justify-content:space-between;font-size:9px;margin:2px 0}
@@ -213,7 +215,7 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
     <div class="grand-total">
       <div class="gt-row"><span>💰 TOTAL GÉNÉRAL MONTANT :</span><span>${formatAr(grandTotalMontant)}</span></div>
       <div class="gt-row"><span>🚚 TOTAL GÉNÉRAL FRAIS :</span><span>${formatAr(grandTotalFrais)}</span></div>
-      <div class="gt-total gt-row"><span>💵 TOTAL GÉNÉRAL À REMETTRE :</span><span>${formatAr(grandTotalGeneral)}</span></div>
+      <div class="gt-total gt-row"><span>💵 TOTAL GÉNÉRAL À REMETTRE AU LIVREUR :</span><span>${formatAr(grandTotalGeneral)}</span></div>
     </div>
     <div class="footer">--- Merci pour votre travail ---</div>
     <div class="no-print"><button class="print-btn" onclick="window.print()">🖨️ Imprimer</button></div>
