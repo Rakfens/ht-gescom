@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { COLORS, formatAr, TODAY } from '../../utils/constants';
-import { btn, inp, lbl, tag } from '../../utils/helpers';
+import { btn, inp, inpSm, lbl, tag } from '../../utils/helpers';
 import { fetchRecuperations, addRecuperation, updateRecuperation, deleteRecuperation, getRecuperationsByDate } from '../../services/recuperationService';
 
 export const Recuperation = ({ agents, showToast }) => {
