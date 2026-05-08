@@ -5,6 +5,7 @@ import { fetchAgents, addAgent, updateAgent, deleteAgent } from './services/agen
 import { fetchLivraisons, addLivraison, updateLivraison, deleteLivraison } from './services/livraisonService';
 import { fetchAvances, addAvance, annulerAvance, deleteAvance } from './services/avanceService';
 import { fetchCommission, updateCommission, fetchLogo } from './services/configService';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Composants
 import { Header } from './components/Layout/Header';
@@ -21,6 +22,14 @@ import { Recap } from './components/Recap/Recap';
 import { Agents } from './components/Agents/Agents';
 
 export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+export default function AppContent() {
   // États d'authentification
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);

@@ -224,4 +224,40 @@ input[type=number]::-webkit-outer-spin-button {
   aside {
     width: 180px !important;
   }
+
+  :root {
+  --bg: #0b1120;
+  --card: #141e2e;
+  --border: #1e293b;
+  --border2: #2d3d55;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+  --blue: #3b82f6;
+  --green: #34d399;
+  --orange: #fb923c;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --purple: #a78bfa;
+  --teal: #38bdf8;
+  --pink: #f472b6;
+}
+
+[data-theme="light"] {
+  --bg: #f0f4f8;
+  --card: #ffffff;
+  --border: #cbd5e1;
+  --border2: #e2e8f0;
+  --text: #1e293b;
+  --muted: #475569;
+  --subtle: #64748b;
+  --blue: #2563eb;
+  --green: #059669;
+  --orange: #ea580c;
+  --yellow: #d97706;
+  --red: #dc2626;
+  --purple: #7c3aed;
+  --teal: #0d9488;
+  --pink: #db2777;
+}
 }

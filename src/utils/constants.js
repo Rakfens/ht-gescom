@@ -31,21 +31,21 @@ export const PAIE_MODES = {
 
 // ==================== COULEURS (STYLES) ====================
 export const COLORS = {
-  bg: '#0b1120',
-  card: '#141e2e',
-  border: '#1e293b',
-  border2: '#2d3d55',
-  text: '#e2e8f0',
-  muted: '#64748b',
-  subtle: '#94a3b8',
-  blue: '#3b82f6',
-  green: '#34d399',
-  orange: '#fb923c',
-  yellow: '#fbbf24',
-  red: '#f87171',
-  purple: '#a78bfa',
-  teal: '#38bdf8',
-  pink: '#f472b6'
+  bg: 'var(--bg)',
+  card: 'var(--card)',
+  border: 'var(--border)',
+  border2: 'var(--border2)',
+  text: 'var(--text)',
+  muted: 'var(--muted)',
+  subtle: 'var(--subtle)',
+  blue: 'var(--blue)',
+  green: 'var(--green)',
+  orange: 'var(--orange)',
+  yellow: 'var(--yellow)',
+  red: 'var(--red)',
+  purple: 'var(--purple)',
+  teal: 'var(--teal)',
+  pink: 'var(--pink)'
 };
 
 // ==================== AUTHENTIFICATION ====================

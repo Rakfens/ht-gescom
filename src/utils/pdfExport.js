@@ -228,21 +228,26 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
     clientsHtml += `<div class="client-livraisons">`;
     
     for (let i = 0; i < data.livraisons.length; i++) {
-      const l = data.livraisons[i];
-      const montant = l.paiement === 'client' ? 0 : parseFloat(l.montant || 0);
-      const frais = parseFloat(l.frais || 0);
-      const statut = STATUTS[l.statut]?.label || l.statut;
-      
-      clientsHtml += `
-        <div class="liv-item">
-          <div class="liv-title">${i+1}. ${l.colis}</div>
-          <div class="liv-dest">${l.destinataire || '-'}${l.destinataire_lieu ? ' - ' + l.destinataire_lieu : ''}</div>
-          <div class="liv-row"><span>💰 Montant :</span><span>${l.paiement === 'client' ? 'Payé client' : formatAr(montant)}</span></div>
-          <div class="liv-row"><span>🚚 Frais :</span><span>${formatAr(frais)}</span></div>
-          <div class="liv-row"><span>📊 Statut :</span><span>${statut}</span></div>
+    const l = data.livraisons[i];
+    const montant = l.paiement === 'client' ? 0 : parseFloat(l.montant || 0);
+    const frais = parseFloat(l.frais || 0);
+    const statut = STATUTS[l.statut]?.label || l.statut;
+    const destinataireTel = l.destinataire_telephone ? `📞 ${l.destinataire_telephone}` : '';
+
+    clientsHtml += `
+      <div class="liv-item">
+        <div class="liv-title">${i+1}. ${l.colis}</div>
+        <div class="liv-dest">
+          🚚 ${l.destinataire || '-'}
+          ${destinataireTel ? `<br>${destinataireTel}` : ''}
+          ${l.destinataire_lieu ? `<br>📍 ${l.destinataire_lieu}` : ''}
         </div>
-      `;
-    }
+        <div class="liv-row"><span>💰 Montant :</span><span>${l.paiement === 'client' ? 'Payé client' : formatAr(montant)}</span></div>
+        <div class="liv-row"><span>🚚 Frais :</span><span>${formatAr(frais)}</span></div>
+        <div class="liv-row"><span>📊 Statut :</span><span>${statut}</span></div>
+      </div>
+    `;
+  }
     
     clientsHtml += `<div class="client-total">`;
     clientsHtml += `<div class="total-line">💰 TOTAL MONTANT : ${formatAr(data.totalMontant)}</div>`;
