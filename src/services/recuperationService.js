@@ -34,18 +34,19 @@ export const getRecuperationsByDate = async (date) => {
   return data;
 };
 
-export const getRecuperationsByLivreur = async (livreurId, mois) => {
-  let query = supabase.from('recuperations').select('*').eq('livreur_id', livreurId);
-  if (mois) {
-    query = query.eq('date', mois);
-  }
-  const { data, error } = await query.order('date', { ascending: false });
+export const getRecuperationsByMonth = async (mois) => {
+  // mois format: 'YYYY-MM'
+  const { data, error } = await supabase.from('recuperations').select('*').ilike('date', `${mois}%`).order('date', { ascending: false });
   if (error) throw error;
   return data;
 };
 
-export const getRecuperationsByMonth = async (mois) => {
-  const { data, error } = await supabase.from('recuperations').select('*').eq('date', mois).order('date', { ascending: false });
+export const getRecuperationsByLivreur = async (livreurId, mois) => {
+  let query = supabase.from('recuperations').select('*').eq('livreur_id', livreurId);
+  if (mois) {
+    query = query.ilike('date', `${mois}%`);
+  }
+  const { data, error } = await query.order('date', { ascending: false });
   if (error) throw error;
   return data;
 };

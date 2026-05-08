@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { formatAr, TODAY, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../utils/constants';
 import { btn, tag } from '../../utils/helpers';
+import { getRecuperationsByDate } from '../../services/recuperationService';
 
 export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [recuperationsJour, setRecuperationsJour] = useState([]);
+  const [loadingRecup, setLoadingRecup] = useState(false);
+  
   const enCours = livraisons.filter(l => l.statut === 'en_cours').length;
   const todayLivs = livraisons.filter(l => l.date === TODAY());
   
@@ -17,6 +21,35 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
     parseFloat(l.frais || 0) > 0
   );
 
+  // Charger les récupérations du jour
+  useEffect(() => {
+    const loadRecuperations = async () => {
+      setLoadingRecup(true);
+      try {
+        const data = await getRecuperationsByDate(TODAY());
+        setRecuperationsJour(data || []);
+      } catch (error) {
+        console.error('Erreur chargement récupérations:', error);
+      } finally {
+        setLoadingRecup(false);
+      }
+    };
+    loadRecuperations();
+  }, []);
+
+  // Calcul des totaux des récupérations
+  const totalRecuperationsJour = recuperationsJour.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
+  const nbRecuperationsJour = recuperationsJour.length;
+
+  // Regrouper par livreur pour les récupérations
+  const recuperationsParLivreur = recuperationsJour.reduce((acc, r) => {
+    const nom = r.livreur_nom;
+    if (!acc[nom]) acc[nom] = { livreur: nom, total: 0, nb: 0 };
+    acc[nom].total += (r.frais_recuperation || 0);
+    acc[nom].nb += 1;
+    return acc;
+  }, {});
+
   // Détection mobile
   useEffect(() => {
     const handleResize = () => {
@@ -28,7 +61,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 18 }}>Tableau de bord</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 18 }}>Tableau de bord</h1>
       
       {/* Cartes statistiques */}
       <div style={{ 
@@ -55,6 +88,31 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
         </div>
       </div>
 
+      {/* Carte Récupérations du jour */}
+      <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0b1120)', border: '1px solid #f59e0b', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, marginBottom: 4 }}>📦 RÉCUPÉRATIONS MATINALES — Aujourd'hui ({TODAY()})</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9' }}>{formatAr(totalRecuperationsJour)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{nbRecuperationsJour} récupération(s)</div>
+          </div>
+          <button style={{ ...btn('#f59e0b', '#d97706'), padding: '10px 16px', fontSize: 12 }} onClick={() => onNavigate('recuperation')}>Voir détails →</button>
+        </div>
+        
+        {/* Détail par livreur */}
+        {Object.keys(recuperationsParLivreur).length > 0 && (
+          <div style={{ marginTop: 12, borderTop: '1px solid #334155', paddingTop: 10 }}>
+            <div style={{ fontSize: 10, color: '#f59e0b', marginBottom: 6 }}>Détail par livreur :</div>
+            {Object.values(recuperationsParLivreur).map(rl => (
+              <div key={rl.livreur} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                <span>👨‍💼 {rl.livreur}</span>
+                <span style={{ color: '#f59e0b' }}>{rl.nb} récup. • {formatAr(rl.total)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Carte gérant */}
       <div style={{ background: 'linear-gradient(135deg,#1e1060,#0b1120)', border: '1px solid var(--purple)', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -72,7 +130,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
         </div>
       </div>
 
-      {/* Récap par agent - Version responsive */}
+      {/* Récap par agent */}
       <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span>👥 Récap par agent</span>
         <span style={{ fontSize: 10, background: 'var(--border)', padding: '2px 8px', borderRadius: 20 }}>tous temps</span>
