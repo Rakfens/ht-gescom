@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { COLORS, formatAr, currentMonth, monthLabel, shouldCountGerantCommission } from '../../utils/constants';
-import { btn, inpSm, lbl, tag } from '../../utils/helpers';
+import { btn, inpSm, lbl, tag, inp } from '../../utils/helpers';
 import { getRecuperationsByMonth } from '../../services/recuperationService';
 
 export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvance, onAnnulerAvance, onDeleteAvance, showToast }) => {
@@ -70,7 +70,42 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const monthTotalRecuperations = monthStatsByAgent.reduce((s, a) => s + a.totalRecuperations, 0);
   const monthBenefice = monthTotalFrais - monthTotalSalaires - monthGerantGain - monthTotalRecuperations;
 
-  // ... reste du code (handleAddAvance, handleAnnulerAvance, handleDeleteAvance)
+  const handleAddAvance = async () => {
+    if (!avanceAgentId || !avanceMontant) {
+      showToast('Agent et montant requis', 'error');
+      return;
+    }
+    const agent = agents.find(a => a.id === parseInt(avanceAgentId));
+    if (onAddAvance) {
+      await onAddAvance({
+        agent_id: parseInt(avanceAgentId),
+        agent_nom: agent?.nom,
+        montant: parseFloat(avanceMontant),
+        motif: avanceMotif,
+        date: new Date().toISOString().split('T')[0],
+        mois: currentMonth(),
+        annule: false
+      });
+    }
+    setAvanceAgentId('');
+    setAvanceMontant('');
+    setAvanceMotif('');
+    showToast('Avance ajoutée');
+  };
+
+  const handleAnnulerAvance = async (id) => {
+    if (onAnnulerAvance) {
+      await onAnnulerAvance(id);
+      showToast('Avance annulée', 'warn');
+    }
+  };
+
+  const handleDeleteAvance = async (id) => {
+    if (onDeleteAvance) {
+      await onDeleteAvance(id);
+      showToast('Avance supprimée', 'warn');
+    }
+  };
 
   return (
     <div>
@@ -81,7 +116,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         </select>
       </div>
 
-      {/* Bénéfice net */}
       <div style={{ background: 'linear-gradient(135deg,' + (monthBenefice >= 0 ? '#14532d' : '#450a0a') + ',' + COLORS.bg + ')', border: '1px solid ' + (monthBenefice >= 0 ? '#34d399' : '#f87171'), borderRadius: 14, padding: '20px 22px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 4 }}>BÉNÉFICE NET — {monthLabel(selectedMonth)}</div>
@@ -98,7 +132,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         </div>
       </div>
 
-      {/* Commission gérant */}
       <div style={{ background: 'linear-gradient(135deg,#1e1060,#0b1120)', border: '1px solid ' + COLORS.purple, borderRadius: 12, padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontSize: 11, color: COLORS.purple, fontWeight: 700, marginBottom: 4 }}>🧑‍💼 COMMISSION GÉRANT — {monthLabel(selectedMonth)}</div>
@@ -107,7 +140,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         </div>
       </div>
 
-      {/* Agents avec récupérations */}
       <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 10 }}>Agents — {monthLabel(selectedMonth)}</h2>
       {monthStatsByAgent.map(a => (
         <div key={a.id} style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
@@ -120,7 +152,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
             </div>
           </div>
           
-          {/* Statistiques livraisons */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 12, color: COLORS.muted, marginBottom: 10 }}>
             <span>📦 Total: <b style={{ color: COLORS.text }}>{a.nbLivs}</b></span>
             <span>✅ Livrés: <b style={{ color: COLORS.green }}>{a.nbLivres}</b></span>
@@ -130,7 +161,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
             <span>💸 Frais: <b style={{ color: COLORS.orange }}>{formatAr(a.totalFrais)}</b></span>
           </div>
 
-          {/* Récupérations du mois */}
           {a.nbRecuperations > 0 && (
             <div style={{ marginTop: 8, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -154,7 +184,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         </div>
       ))}
 
-      {/* Formulaire avances */}
       <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 10, marginTop: 20 }}>Ajouter une avance</h2>
       <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border2, borderRadius: 12, padding: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
@@ -177,7 +206,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         <button style={{ ...btn(COLORS.orange, '#d97706'), width: '100%', padding: 12 }} onClick={handleAddAvance}>+ Enregistrer l'avance</button>
       </div>
 
-      {/* Avances annulées */}
       {avances.filter(a => a.mois === selectedMonth && a.annule).length > 0 && (
         <div style={{ marginTop: 16 }}>
           <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 8 }}>Avances annulées</h2>
