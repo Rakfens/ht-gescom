@@ -2,13 +2,11 @@ import { useState, useMemo } from 'react';
 import { COLORS, formatAr, currentMonth, monthLabel, shouldCountGerantCommission } from '../../utils/constants';
 import { btn, inpSm, lbl, tag, inp } from '../../utils/helpers';
 
-export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvance, onAnnulerAvance, onDeleteAvance, showToast }) => {
+export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvance, onDeleteAvance, showToast }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [avanceAgentId, setAvanceAgentId] = useState('');
   const [avanceMontant, setAvanceMontant] = useState('');
   const [avanceMotif, setAvanceMotif] = useState('');
-  const [editAvanceId, setEditAvanceId] = useState(null);
-  const [editAvanceData, setEditAvanceData] = useState({});
 
   const months = useMemo(() => {
     const s = new Set(livraisons.map(l => l.date?.slice(0, 7)).filter(Boolean));
@@ -68,27 +66,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
     setAvanceMontant('');
     setAvanceMotif('');
     showToast('Avance ajoutée');
-  };
-
-  const handleUpdateAvance = async () => {
-    if (!editAvanceData.montant) {
-      showToast('Montant requis', 'error');
-      return;
-    }
-    await onDeleteAvance(editAvanceId);
-    const agent = agents.find(a => a.id === parseInt(editAvanceData.agent_id));
-    await onAddAvance({
-      agent_id: editAvanceData.agent_id,
-      agent_nom: agent?.nom,
-      montant: parseFloat(editAvanceData.montant),
-      motif: editAvanceData.motif,
-      date: new Date().toISOString().split('T')[0],
-      mois: currentMonth(),
-      annule: false
-    });
-    setEditAvanceId(null);
-    setEditAvanceData({});
-    showToast('Avance modifiée');
   };
 
   const handleDeleteAvance = async (id) => {
@@ -151,7 +128,7 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
             <span>💸 Frais: <b style={{ color: COLORS.orange }}>{formatAr(a.totalFrais)}</b></span>
           </div>
 
-          {/* Liste des avances avec motif et boutons Modifier/Supprimer */}
+          {/* Liste des avances avec bouton Supprimer uniquement */}
           {a.avances.length > 0 && (
             <div style={{ marginTop: 10, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.pink, marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -159,62 +136,25 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
                 <span style={{ fontSize: 9, color: COLORS.orange }}>(déduites du salaire)</span>
               </div>
               {a.avances.map(av => (
-                <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  {editAvanceId === av.id ? (
-                    // Mode édition
-                    <div style={{ display: 'flex', gap: 8, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <input 
-                        type="number" 
-                        style={{ ...inpSm(), width: 120 }} 
-                        value={editAvanceData.montant} 
-                        onChange={e => setEditAvanceData({ ...editAvanceData, montant: e.target.value })} 
-                      />
-                      <input 
-                        type="text" 
-                        style={{ ...inpSm(), width: 180 }} 
-                        placeholder="Motif" 
-                        value={editAvanceData.motif || ''} 
-                        onChange={e => setEditAvanceData({ ...editAvanceData, motif: e.target.value })} 
-                      />
-                      <button style={{ ...btn(COLORS.green, '#047857'), padding: '6px 12px' }} onClick={handleUpdateAvance}>✓</button>
-                      <button style={{ ...btn('#475569', '#334155'), padding: '6px 12px' }} onClick={() => setEditAvanceId(null)}>✕</button>
+                <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 13 }}>{formatAr(parseFloat(av.montant || 0))}</span>
+                      {av.motif && (
+                        <span style={{ fontSize: 11, color: COLORS.subtle, background: COLORS.border, padding: '2px 10px', borderRadius: 15 }}>
+                          📝 {av.motif}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 10, color: COLORS.muted }}>📅 {av.date}</span>
                     </div>
-                  ) : (
-                    <>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                          <span style={{ color: COLORS.orange, fontWeight: 700, fontSize: 13 }}>{formatAr(parseFloat(av.montant || 0))}</span>
-                          {av.motif && (
-                            <span style={{ fontSize: 11, color: COLORS.subtle, background: COLORS.border, padding: '2px 10px', borderRadius: 15 }}>
-                              📝 {av.motif}
-                            </span>
-                          )}
-                          <span style={{ fontSize: 10, color: COLORS.muted }}>📅 {av.date}</span>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button 
-                          onClick={() => {
-                            setEditAvanceId(av.id);
-                            setEditAvanceData({ 
-                              agent_id: av.agent_id, 
-                              montant: av.montant, 
-                              motif: av.motif || '' 
-                            });
-                          }} 
-                          style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '4px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}
-                        >
-                          ✏️ Modifier
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteAvance(av.id)} 
-                          style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
-                        >
-                          🗑 Supprimer
-                        </button>
-                      </div>
-                    </>
-                  )}
+                    <button 
+                      onClick={() => handleDeleteAvance(av.id)} 
+                      style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '4px 10px', color: COLORS.red, fontSize: 11, cursor: 'pointer' }}
+                      title="Supprimer cette avance"
+                    >
+                      🗑 Supprimer
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
