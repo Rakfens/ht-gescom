@@ -29,7 +29,7 @@ export default function App() {
   );
 }
 
-export default function AppContent() {
+function AppContent() {
   // États d'authentification
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
