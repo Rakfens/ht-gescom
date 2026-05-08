@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { COLORS, formatAr, TODAY } from '../../utils/constants';
-import { btn, inp, inpSm, lbl, tag } from '../../utils/helpers';
+import { btn, inp, lbl, tag } from '../../utils/helpers';
 import { fetchRecuperations, addRecuperation, updateRecuperation, deleteRecuperation, getRecuperationsByDate } from '../../services/recuperationService';
 
 export const Recuperation = ({ agents, showToast }) => {
@@ -10,7 +10,7 @@ export const Recuperation = ({ agents, showToast }) => {
     livreur_id: '',
     livreur_nom: '',
     client_donneur: '',
-    nbr_colis: 1
+    frais_recuperation: 1000
   });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
@@ -44,19 +44,17 @@ export const Recuperation = ({ agents, showToast }) => {
       livreur_id: parseInt(form.livreur_id),
       livreur_nom: agent?.nom,
       client_donneur: form.client_donneur,
-      nbr_colis: parseInt(form.nbr_colis) || 1
+      frais_recuperation: parseInt(form.frais_recuperation) || 0
     };
     await addRecuperation(newRecup);
-    setForm({ livreur_id: '', livreur_nom: '', client_donneur: '', nbr_colis: 1 });
+    setForm({ livreur_id: '', livreur_nom: '', client_donneur: '', frais_recuperation: 1000 });
     loadRecuperations();
     showToast('Récupération ajoutée');
   };
 
   const handleUpdate = async () => {
-    const gain = (parseInt(editData.nbr_colis) || 1) * 1000;
     await updateRecuperation(editId, { 
-      nbr_colis: parseInt(editData.nbr_colis) || 1,
-      gain: gain
+      frais_recuperation: parseInt(editData.frais_recuperation) || 0
     });
     setEditId(null);
     loadRecuperations();
@@ -72,16 +70,15 @@ export const Recuperation = ({ agents, showToast }) => {
   };
 
   // Calcul des totaux du jour
-  const totalGains = recuperations.reduce((s, r) => s + (r.gain || r.nbr_colis * 1000), 0);
-  const totalColis = recuperations.reduce((s, r) => s + (r.nbr_colis || 1), 0);
+  const totalGains = recuperations.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
+  const totalRecuperations = recuperations.length;
 
   // Regrouper par livreur
   const recuperationsParLivreur = recuperations.reduce((acc, r) => {
     const nom = r.livreur_nom;
-    if (!acc[nom]) acc[nom] = { livreur: nom, recuperations: [], totalGain: 0, totalColis: 0 };
+    if (!acc[nom]) acc[nom] = { livreur: nom, recuperations: [], totalGain: 0 };
     acc[nom].recuperations.push(r);
-    acc[nom].totalGain += (r.gain || r.nbr_colis * 1000);
-    acc[nom].totalColis += (r.nbr_colis || 1);
+    acc[nom].totalGain += (r.frais_recuperation || 0);
     return acc;
   }, {});
 
@@ -95,10 +92,10 @@ export const Recuperation = ({ agents, showToast }) => {
           <div>
             <div style={{ fontSize: 12, color: '#a78bfa', fontWeight: 700, marginBottom: 4 }}>📅 Récupérations du {selectedDate}</div>
             <div style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>{formatAr(totalGains)}</div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>{totalColis} colis récupérés</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>{totalRecuperations} récupération(s)</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: '#64748b' }}>💰 1000 Ar par colis</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>💰 Frais variable selon distance</div>
             <div style={{ fontSize: 11, color: '#64748b' }}>✅ Non inclus dans le salaire mensuel</div>
           </div>
         </div>
@@ -118,7 +115,7 @@ export const Recuperation = ({ agents, showToast }) => {
       {/* Formulaire d'ajout */}
       <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border2, borderRadius: 12, padding: 16, marginBottom: 20 }}>
         <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.muted, marginBottom: 12 }}>➕ Ajouter une récupération</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
             <label style={lbl()}>👨‍💼 Livreur</label>
             <select style={inp()} value={form.livreur_id} onChange={e => {
@@ -135,12 +132,11 @@ export const Recuperation = ({ agents, showToast }) => {
             <input style={inp()} placeholder="Ex: SARL TECH" value={form.client_donneur} onChange={e => setForm({ ...form, client_donneur: e.target.value })} />
           </div>
           <div>
-            <label style={lbl()}>📦 Nombre de colis</label>
-            <input type="number" style={inp()} placeholder="1" value={form.nbr_colis} onChange={e => setForm({ ...form, nbr_colis: e.target.value })} />
+            <label style={lbl()}>💰 Frais de récupération (Ar)</label>
+            <input type="number" style={inp()} placeholder="1000" value={form.frais_recuperation} onChange={e => setForm({ ...form, frais_recuperation: e.target.value })} />
           </div>
-          <button style={{ ...btn(COLORS.green, '#059669'), padding: '10px 20px' }} onClick={handleAdd}>+ Ajouter</button>
         </div>
-        <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 10, textAlign: 'center' }}>💰 Gain : {formatAr((parseInt(form.nbr_colis) || 0) * 1000)}</div>
+        <button style={{ ...btn(COLORS.green, '#059669'), width: '100%', padding: '10px', marginTop: 12 }} onClick={handleAdd}>+ Ajouter la récupération</button>
       </div>
 
       {/* Liste des récupérations du jour */}
@@ -157,15 +153,15 @@ export const Recuperation = ({ agents, showToast }) => {
             <div key={rl.livreur} style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ background: '#1e3a5f', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div><span style={{ fontWeight: 700, color: '#fff' }}>👨‍💼 {rl.livreur}</span></div>
-                <div><span style={{ color: '#60a5fa' }}>📦 {rl.totalColis} colis</span> <span style={{ color: '#34d399', marginLeft: 12 }}>💰 {formatAr(rl.totalGain)}</span></div>
+                <div><span style={{ color: '#34d399' }}>💰 {formatAr(rl.totalGain)}</span></div>
               </div>
               <div style={{ padding: '10px' }}>
                 {rl.recuperations.map(r => (
                   <div key={r.id} style={{ background: COLORS.bg, borderRadius: 8, padding: '8px 12px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     {editId === r.id ? (
-                      <div style={{ display: 'flex', gap: 8, flex: 1, flexWrap: 'wrap' }}>
-                        <input style={{ ...inpSm(), width: 150 }} value={editData.client_donneur} onChange={e => setEditData({ ...editData, client_donneur: e.target.value })} />
-                        <input type="number" style={{ ...inpSm(), width: 100 }} value={editData.nbr_colis} onChange={e => setEditData({ ...editData, nbr_colis: e.target.value })} />
+                      <div style={{ display: 'flex', gap: 8, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <span style={{ minWidth: 150, fontWeight: 600 }}>🏪 {editData.client_donneur}</span>
+                        <input type="number" style={{ ...inp(), width: 150 }} placeholder="Frais" value={editData.frais_recuperation} onChange={e => setEditData({ ...editData, frais_recuperation: e.target.value })} />
                         <button style={{ ...btn(COLORS.green, '#047857'), padding: '6px 12px' }} onClick={handleUpdate}>✓</button>
                         <button style={{ ...btn('#475569', '#334155'), padding: '6px 12px' }} onClick={() => setEditId(null)}>✕</button>
                       </div>
@@ -173,10 +169,10 @@ export const Recuperation = ({ agents, showToast }) => {
                       <>
                         <div style={{ flex: 1 }}>
                           <div><span style={{ fontWeight: 600 }}>🏪 {r.client_donneur}</span></div>
-                          <div style={{ fontSize: 11, color: COLORS.muted }}>📦 {r.nbr_colis} colis • 💰 {formatAr(r.gain || r.nbr_colis * 1000)}</div>
+                          <div style={{ fontSize: 11, color: COLORS.muted }}>💰 {formatAr(r.frais_recuperation)}</div>
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '5px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }} onClick={() => { setEditId(r.id); setEditData({ client_donneur: r.client_donneur, nbr_colis: r.nbr_colis }); }}>✏️</button>
+                          <button style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '5px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }} onClick={() => { setEditId(r.id); setEditData({ client_donneur: r.client_donneur, frais_recuperation: r.frais_recuperation }); }}>✏️</button>
                           <button style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '5px 10px', color: '#f87171', fontSize: 11, cursor: 'pointer' }} onClick={() => handleDelete(r.id)}>🗑</button>
                         </div>
                       </>

@@ -12,8 +12,7 @@ export const addRecuperation = async (recuperation) => {
     livreur_id: recuperation.livreur_id,
     livreur_nom: recuperation.livreur_nom,
     client_donneur: recuperation.client_donneur,
-    nbr_colis: recuperation.nbr_colis || 1,
-    gain: (recuperation.nbr_colis || 1) * 1000
+    frais_recuperation: recuperation.frais_recuperation || 1000
   }]).select();
   if (error) throw error;
   return data[0];
