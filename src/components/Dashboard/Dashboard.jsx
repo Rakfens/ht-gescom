@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { formatAr, TODAY, currentMonth, monthLabel, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../utils/constants';
 import { btn, tag, inpSm } from '../../utils/helpers';
-import { getRecuperationsByMonth } from '../../services/recuperationService';
+import { getRecuperationsByDate } from '../../services/recuperationService'; // Changé ici
 
 export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -26,6 +26,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
       setLoadingRecup(true);
       try {
         const data = await getRecuperationsByDate(selectedDate);
+        console.log('Récupérations chargées pour le', selectedDate, ':', data);
         setRecuperationsJour(data || []);
       } catch (error) {
         console.error('Erreur chargement récupérations:', error);
@@ -39,6 +40,8 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
   // Calcul des totaux des récupérations
   const totalRecuperationsJour = recuperationsJour.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
   const nbRecuperationsJour = recuperationsJour.length;
+
+  console.log('Total récupérations du jour:', totalRecuperationsJour, 'Nombre:', nbRecuperationsJour);
 
   // Regrouper par livreur
   const recuperationsParLivreur = recuperationsJour.reduce((acc, r) => {
@@ -107,8 +110,15 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
           </div>
         </div>
         
+        {/* Indicateur de chargement */}
+        {loadingRecup && (
+          <div style={{ textAlign: 'center', color: '#64748b', padding: '20px 0' }}>
+            Chargement...
+          </div>
+        )}
+        
         {/* Détail par livreur */}
-        {Object.keys(recuperationsParLivreur).length > 0 ? (
+        {!loadingRecup && Object.keys(recuperationsParLivreur).length > 0 ? (
           <div style={{ marginTop: 12, borderTop: '1px solid #334155', paddingTop: 10 }}>
             {Object.values(recuperationsParLivreur).map(rl => (
               <div key={rl.livreur} style={{ marginBottom: 12 }}>
@@ -134,9 +144,11 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
             ))}
           </div>
         ) : (
-          <div style={{ textAlign: 'center', color: '#64748b', padding: '20px 0' }}>
-            Aucune récupération enregistrée pour cette date.
-          </div>
+          !loadingRecup && (
+            <div style={{ textAlign: 'center', color: '#64748b', padding: '20px 0' }}>
+              Aucune récupération enregistrée pour cette date.
+            </div>
+          )
         )}
       </div>
 
