@@ -11,24 +11,31 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  // Récupérer le thème sauvegardé dans localStorage ou utiliser 'dark' par défaut
+  // Récupérer le thème sauvegardé ou utiliser 'dark' par défaut
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('aterinay_theme');
-    return savedTheme || 'dark';
+    try {
+      const savedTheme = localStorage.getItem('aterinay_theme');
+      return savedTheme === 'light' ? 'light' : 'dark';
+    } catch (e) {
+      return 'dark';
+    }
   });
 
   // Appliquer le thème au document
   useEffect(() => {
-    localStorage.setItem('aterinay_theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('aterinay_theme', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+      console.log('Thème appliqué:', theme); // Pour vérifier dans la console
+    } catch (e) {
+      console.error('Erreur thème:', e);
+    }
   }, [theme]);
 
-  // Fonction pour basculer entre les thèmes
   const toggleTheme = () => {
     setTheme(prevTheme => (prevTheme === 'dark' ? 'light' : 'dark'));
   };
 
-  // Fonction pour définir un thème spécifique
   const setThemeMode = (mode) => {
     if (mode === 'dark' || mode === 'light') {
       setTheme(mode);
