@@ -22,14 +22,14 @@ export const addRecuperation = async (recuperation) => {
     
     // Validation des données
     if (!recuperation.date) throw new Error('La date est requise');
-    if (!recuperation.livreur_id) throw new Error('Le livreur_id est requis');
     if (!recuperation.livreur_nom) throw new Error('Le livreur_nom est requis');
+    if (!recuperation.client_donneur) throw new Error('Le client_donneur est requis');
     
     const insertData = {
       date: recuperation.date,
-      livreur_id: recuperation.livreur_id,
+      livreur_id: recuperation.livreur_id || null,
       livreur_nom: recuperation.livreur_nom,
-      client_donneur: recuperation.client_donneur || '',
+      client_donneur: recuperation.client_donneur,
       frais_recuperation: parseFloat(recuperation.frais_recuperation) || 1000
     };
     
@@ -135,88 +135,198 @@ export const getRecuperationsByMonth = async (mois) => {
   }
 };
 
+// Version qui utilise le livreur_id (originale)
 export const getRecuperationsByLivreur = async (livreurId, mois) => {
   try {
-    console.log('=== getRecuperationsByLivreur ===');
-    console.log('Livreur ID reçu:', livreurId);
-    console.log('Type du livreur ID:', typeof livreurId);
-    console.log('Mois reçu:', mois);
+    console.log('getRecuperationsByLivreur - Livreur ID:', livreurId, 'Mois:', mois);
     
-    // Vérifier si livreurId est valide
     if (!livreurId) {
       console.log('Aucun livreur ID fourni');
       return [];
     }
     
-    // Construction de la requête
     let query = supabase
       .from('recuperations')
       .select('*')
       .eq('livreur_id', livreurId);
     
-    // Ajouter le filtre par mois si fourni
     if (mois) {
-      console.log('Ajout du filtre mois:', mois);
       query = query.ilike('date', `${mois}%`);
     }
     
-    // Exécuter la requête
     const { data, error } = await query.order('date', { ascending: false });
     
-    if (error) {
-      console.error('Erreur Supabase:', error);
-      throw error;
-    }
+    if (error) throw error;
     
-    console.log(`Récupérations trouvées pour livreur ${livreurId}:`, data?.length || 0);
-    
-    // Afficher les détails si des données sont trouvées
-    if (data && data.length > 0) {
-      console.log('Détails des récupérations:');
-      data.forEach((recup, index) => {
-        console.log(`  ${index + 1}. Date: ${recup.date}, Client: ${recup.client_donneur}, Frais: ${recup.frais_recuperation}`);
-      });
-    } else {
-      console.log('Aucune récupération trouvée pour ce livreur/mois');
-      
-      // Vérifier si le livreur a des récupérations sur d'autres mois
-      const { data: allData, error: allError } = await supabase
-        .from('recuperations')
-        .select('*')
-        .eq('livreur_id', livreurId);
-      
-      if (!allError && allData && allData.length > 0) {
-        console.log(`Mais ce livreur a ${allData.length} récupération(s) sur d'autres mois:`);
-        const months = [...new Set(allData.map(r => r.date.substring(0, 7)))];
-        console.log('Mois disponibles:', months);
-      }
-    }
-    
+    console.log(`getRecuperationsByLivreur - Trouvé ${data?.length || 0} récupérations`);
     return data || [];
-    
   } catch (error) {
     console.error('getRecuperationsByLivreur - Erreur:', error);
     return [];
   }
 };
 
-// Nouvelle fonction utilitaire pour obtenir toutes les récupérations d'un livreur sans filtre
-export const getAllRecuperationsByLivreur = async (livreurId) => {
+// NOUVELLE VERSION : Utilise le nom du livreur (recommandé)
+export const getRecuperationsByLivreurNom = async (livreurNom, mois) => {
   try {
-    console.log('getAllRecuperationsByLivreur - ID:', livreurId);
+    console.log('getRecuperationsByLivreurNom - Livreur Nom:', livreurNom, 'Mois:', mois);
+    
+    if (!livreurNom) {
+      console.log('Aucun livreur nom fourni');
+      return [];
+    }
+    
+    let query = supabase
+      .from('recuperations')
+      .select('*')
+      .eq('livreur_nom', livreurNom);
+    
+    if (mois) {
+      query = query.ilike('date', `${mois}%`);
+    }
+    
+    const { data, error } = await query.order('date', { ascending: false });
+    
+    if (error) throw error;
+    
+    console.log(`getRecuperationsByLivreurNom - Trouvé ${data?.length || 0} récupérations pour ${livreurNom}`);
+    
+    // Afficher le détail des récupérations trouvées
+    if (data && data.length > 0) {
+      data.forEach(recup => {
+        console.log(`  - Date: ${recup.date}, Client: ${recup.client_donneur}, Frais: ${recup.frais_recuperation}`);
+      });
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('getRecuperationsByLivreurNom - Erreur:', error);
+    return [];
+  }
+};
+
+// NOUVELLE FONCTION : Total cumulé par nom (toutes périodes)
+export const getTotalRecuperationsByLivreurNom = async (livreurNom) => {
+  try {
+    console.log('getTotalRecuperationsByLivreurNom - Livreur Nom:', livreurNom);
+    
+    if (!livreurNom) {
+      return { total: 0, count: 0 };
+    }
     
     const { data, error } = await supabase
       .from('recuperations')
-      .select('*')
-      .eq('livreur_id', livreurId)
+      .select('frais_recuperation, date, client_donneur')
+      .eq('livreur_nom', livreurNom)
       .order('date', { ascending: false });
     
     if (error) throw error;
     
-    console.log(`Total récupérations pour livreur ${livreurId}:`, data?.length || 0);
+    const total = data.reduce((sum, r) => sum + (parseFloat(r.frais_recuperation) || 0), 0);
+    const count = data.length;
+    
+    console.log(`getTotalRecuperationsByLivreurNom - ${livreurNom}: ${count} récupérations, total ${total} Ar`);
+    
+    // Afficher le détail cumulé
+    if (data && data.length > 0) {
+      console.log('Détail des récupérations cumulées:');
+      data.forEach(recup => {
+        console.log(`  - Date: ${recup.date}, Client: ${recup.client_donneur}, Frais: ${recup.frais_recuperation}`);
+      });
+    }
+    
+    return { total, count, details: data };
+  } catch (error) {
+    console.error('getTotalRecuperationsByLivreurNom - Erreur:', error);
+    return { total: 0, count: 0, details: [] };
+  }
+};
+
+// Total cumulé par ID (version alternative)
+export const getTotalRecuperationsByLivreur = async (livreurId) => {
+  try {
+    console.log('getTotalRecuperationsByLivreur - Livreur ID:', livreurId);
+    
+    if (!livreurId) {
+      return { total: 0, count: 0 };
+    }
+    
+    const { data, error } = await supabase
+      .from('recuperations')
+      .select('frais_recuperation')
+      .eq('livreur_id', livreurId);
+    
+    if (error) throw error;
+    
+    const total = data.reduce((sum, r) => sum + (parseFloat(r.frais_recuperation) || 0), 0);
+    const count = data.length;
+    
+    console.log(`getTotalRecuperationsByLivreur - Total: ${count} récupérations, ${total} Ar`);
+    return { total, count };
+  } catch (error) {
+    console.error('getTotalRecuperationsByLivreur - Erreur:', error);
+    return { total: 0, count: 0 };
+  }
+};
+
+// Récupérer toutes les récupérations d'un livreur par nom (sans filtre de mois)
+export const getAllRecuperationsByLivreurNom = async (livreurNom) => {
+  try {
+    console.log('getAllRecuperationsByLivreurNom - Livreur Nom:', livreurNom);
+    
+    if (!livreurNom) {
+      return [];
+    }
+    
+    const { data, error } = await supabase
+      .from('recuperations')
+      .select('*')
+      .eq('livreur_nom', livreurNom)
+      .order('date', { ascending: false });
+    
+    if (error) throw error;
+    
+    console.log(`getAllRecuperationsByLivreurNom - Trouvé ${data?.length || 0} récupérations pour ${livreurNom}`);
     return data || [];
   } catch (error) {
-    console.error('getAllRecuperationsByLivreur - Erreur:', error);
+    console.error('getAllRecuperationsByLivreurNom - Erreur:', error);
     return [];
+  }
+};
+
+// Récupérer les statistiques par mois pour tous les livreurs
+export const getRecuperationsStatsByMonth = async (mois) => {
+  try {
+    console.log('getRecuperationsStatsByMonth - Mois:', mois);
+    
+    const { data, error } = await supabase
+      .from('recuperations')
+      .select('*')
+      .ilike('date', `${mois}%`);
+    
+    if (error) throw error;
+    
+    // Grouper par livreur
+    const stats = {};
+    data.forEach(recup => {
+      const nom = recup.livreur_nom;
+      if (!stats[nom]) {
+        stats[nom] = {
+          livreur_nom: nom,
+          total: 0,
+          count: 0,
+          details: []
+        };
+      }
+      stats[nom].total += parseFloat(recup.frais_recuperation) || 0;
+      stats[nom].count += 1;
+      stats[nom].details.push(recup);
+    });
+    
+    console.log(`getRecuperationsStatsByMonth - Stats pour ${mois}:`, stats);
+    return stats;
+  } catch (error) {
+    console.error('getRecuperationsStatsByMonth - Erreur:', error);
+    return {};
   }
 };

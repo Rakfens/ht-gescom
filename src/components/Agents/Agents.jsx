@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { COLORS, formatAr, currentMonth, monthLabel } from '../../utils/constants';
 import { btn, inp, inpSm, lbl } from '../../utils/helpers';
-import { getRecuperationsByLivreur, getAllRecuperationsByLivreur } from '../../services/recuperationService';
+import { getRecuperationsByLivreurNom, getTotalRecuperationsByLivreurNom } from '../../services/recuperationService';
 
 export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showToast }) => {
   const [newAgentNom, setNewAgentNom] = useState('');
@@ -10,52 +10,65 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
   const [editAgentData, setEditAgentData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [recuperationsAgent, setRecuperationsAgent] = useState({});
+  const [cumulAgent, setCumulAgent] = useState({});
   const [loading, setLoading] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const months = [...new Set([...agents.map(() => currentMonth()), currentMonth()])].sort().reverse();
   const uniqueMonths = [...new Set(months)];
 
-  // Fonction pour charger les récupérations
+  // Fonction pour charger les récupérations en utilisant le NOM de l'agent
   const loadAllRecuperations = async () => {
     if (!agents.length) return;
     
     setLoading(true);
     console.log('=== CHARGEMENT DES RÉCUPÉRATIONS ===');
-    console.log('Mois sélectionné:', selectedMonth);
-    console.log('Nombre d\'agents:', agents.length);
     
     const recupsMap = {};
+    const cumulMap = {};
     
     for (const agent of agents) {
       try {
-        console.log(`\n--- Chargement pour: ${agent.nom} (ID: ${agent.id}) ---`);
-        
-        const data = await getRecuperationsByLivreur(agent.id, selectedMonth);
+        // Récupérer les récupérations du mois par NOM
+        const dataMois = await getRecuperationsByLivreurNom(agent.nom, selectedMonth);
         
         recupsMap[agent.id] = {
-          total: data.reduce((s, r) => s + (parseFloat(r.frais_recuperation) || 0), 0),
-          count: data.length,
-          details: data
+          total: dataMois.reduce((s, r) => s + (parseFloat(r.frais_recuperation) || 0), 0),
+          count: dataMois.length,
+          details: dataMois
         };
         
-        console.log(`Résultat pour ${agent.nom}: ${data.length} récupération(s), total: ${recupsMap[agent.id].total}`);
+        console.log(`Agent ${agent.nom}: ${dataMois.length} récupérations ce mois-ci, total: ${recupsMap[agent.id].total} Ar`);
+        
+        // Récupérer le total cumulé (toutes périodes)
+        const { total: totalCumul, count: countCumul } = await getTotalRecuperationsByLivreurNom(agent.nom);
+        cumulMap[agent.id] = {
+          total: totalCumul,
+          count: countCumul
+        };
+        
+        console.log(`Agent ${agent.nom}: Cumul total: ${countCumul} récupérations, ${totalCumul} Ar`);
         
       } catch (error) {
-        console.error(`Erreur pour agent ${agent.id}:`, error);
+        console.error(`Erreur pour agent ${agent.nom}:`, error);
         recupsMap[agent.id] = { total: 0, count: 0, details: [] };
+        cumulMap[agent.id] = { total: 0, count: 0 };
       }
     }
     
-    console.log('\n=== RÉCAPITULATIF FINAL ===');
-    console.log(recupsMap);
     setRecuperationsAgent(recupsMap);
+    setCumulAgent(cumulMap);
     setLoading(false);
   };
 
-  // Charger au montage et quand les dépendances changent
   useEffect(() => {
     loadAllRecuperations();
-  }, [agents, selectedMonth]);
+  }, [agents, selectedMonth, refreshTrigger]);
+
+  const refreshData = () => {
+    setRefreshTrigger(prev => prev + 1);
+    showToast('Données rafraîchies', 'success');
+  };
 
   const handleAddAgent = async () => {
     if (!newAgentNom.trim() || !newAgentSalaire) {
@@ -66,6 +79,7 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     setNewAgentNom('');
     setNewAgentSalaire('');
     showToast('Agent ajouté');
+    refreshData();
   };
 
   const handleUpdateAgent = async () => {
@@ -73,12 +87,14 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
     await onUpdateAgent(editAgentId, { nom: editAgentData.nom, salaire: parseFloat(editAgentData.salaire) });
     setEditAgentId(null);
     showToast('Agent modifié');
+    refreshData();
   };
 
   const handleDeleteAgent = async (id) => {
     if (window.confirm('Supprimer cet agent ?')) {
       await onDeleteAgent(id);
       showToast('Agent supprimé', 'warn');
+      refreshData();
     }
   };
 
@@ -89,7 +105,7 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
       {/* Sélecteur de mois et boutons */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ background: COLORS.card, padding: '8px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations du mois :</span>
+          <span style={{ fontSize: 11, color: '#f59e0b' }}>📅 Afficher les récupérations du :</span>
           <select 
             style={{ ...inpSm(), width: 'auto', padding: '4px 8px' }} 
             value={selectedMonth} 
@@ -100,14 +116,13 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
         </div>
         
         <button 
-          onClick={() => loadAllRecuperations()}
+          onClick={refreshData}
           style={{ background: '#f59e0b', border: 'none', borderRadius: 8, padding: '6px 12px', color: '#000', fontSize: 12, cursor: 'pointer' }}
         >
           🔄 Rafraîchir
         </button>
       </div>
 
-      {/* Indicateur de chargement */}
       {loading && (
         <div style={{ textAlign: 'center', padding: 20, color: COLORS.muted }}>
           Chargement des récupérations...
@@ -132,11 +147,13 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
 
       {/* Liste des agents */}
       <h2 style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', marginBottom: 12 }}>
-        Liste ({agents.length})
+        Liste des agents ({agents.length})
       </h2>
       
       {agents.map(a => {
-        const recups = recuperationsAgent[a.id] || { total: 0, count: 0 };
+        const recupsMois = recuperationsAgent[a.id] || { total: 0, count: 0 };
+        const recupsCumul = cumulAgent[a.id] || { total: 0, count: 0 };
+        
         return (
           <div key={a.id} style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
             {editAgentId === a.id ? (
@@ -164,7 +181,7 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 15 }}>{a.nom}</div>
-                    <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>{formatAr(parseFloat(a.salaire || 0))} / mois</div>
+                    <div style={{ fontSize: 12, color: COLORS.green, fontWeight: 600 }}>Salaire: {formatAr(parseFloat(a.salaire || 0))} / mois</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button style={{ background: '#1e3a5f', border: 'none', borderRadius: 7, padding: '7px 11px', color: '#60a5fa', fontSize: 13, cursor: 'pointer' }} onClick={() => { setEditAgentId(a.id); setEditAgentData({ nom: a.nom, salaire: a.salaire }); }}>✏️</button>
@@ -172,24 +189,39 @@ export const Agents = ({ agents, onAddAgent, onUpdateAgent, onDeleteAgent, showT
                   </div>
                 </div>
 
-                {/* Récapitulatif des récupérations */}
+                {/* Récupérations du mois sélectionné */}
                 <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid ' + COLORS.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations</span>
-                      <span style={{ fontSize: 11, color: COLORS.muted }}>({monthLabel(selectedMonth)})</span>
-                    </div>
+                    <span style={{ fontSize: 11, color: '#f59e0b' }}>📦 Récupérations ({monthLabel(selectedMonth)})</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontSize: 11, color: '#f59e0b' }}>{recups.count} récup.</span>
-                      <span style={{ fontSize: 13, color: '#34d399', fontWeight: 700 }}>💰 {formatAr(recups.total)}</span>
+                      <span style={{ fontSize: 12, color: '#f59e0b' }}>{recupsMois.count} récup.</span>
+                      <span style={{ fontSize: 14, color: '#34d399', fontWeight: 700 }}>{formatAr(recupsMois.total)} Ar</span>
                     </div>
                   </div>
                   
-                  {recups.count === 0 && !loading && (
-                    <div style={{ fontSize: 11, color: COLORS.muted, textAlign: 'center', marginTop: 8 }}>
-                      Aucune récupération pour ce mois
+                  {/* Afficher les détails des récupérations du mois */}
+                  {recupsMois.details && recupsMois.details.length > 0 && (
+                    <div style={{ marginTop: 8, background: COLORS.bg, borderRadius: 6, padding: 6 }}>
+                      {recupsMois.details.map((r, idx) => (
+                        <div key={idx} style={{ fontSize: 10, color: COLORS.muted, padding: '3px 0', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>📅 {r.date}</span>
+                          <span>🏪 {r.client_donneur}</span>
+                          <span style={{ color: '#34d399' }}>{formatAr(r.frais_recuperation)} Ar</span>
+                        </div>
+                      ))}
                     </div>
                   )}
+                </div>
+
+                {/* TOTAL CUMULÉ (toutes périodes) */}
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid ' + COLORS.border2, background: COLORS.bg, borderRadius: 8, padding: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 600 }}>💰 TOTAL CUMULÉ (toutes périodes)</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 12, color: '#fbbf24' }}>{recupsCumul.count} récup.</span>
+                      <span style={{ fontSize: 16, color: '#fbbf24', fontWeight: 800 }}>{formatAr(recupsCumul.total)} Ar</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
