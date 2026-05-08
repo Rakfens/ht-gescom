@@ -1,7 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { COLORS, formatAr, currentMonth, monthLabel, shouldCountGerantCommission } from '../../utils/constants';
 import { btn, inpSm, lbl, tag, inp } from '../../utils/helpers';
-import { getRecuperationsByMonth } from '../../services/recuperationService';
 
 export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvance, onAnnulerAvance, onDeleteAvance, showToast }) => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
@@ -10,8 +9,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const [avanceMotif, setAvanceMotif] = useState('');
   const [editAvanceId, setEditAvanceId] = useState(null);
   const [editAvanceData, setEditAvanceData] = useState({});
-  const [recuperationsMois, setRecuperationsMois] = useState([]);
-  const [loadingRecup, setLoadingRecup] = useState(false);
 
   const months = useMemo(() => {
     const s = new Set(livraisons.map(l => l.date?.slice(0, 7)).filter(Boolean));
@@ -22,29 +19,11 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const monthLivs = useMemo(() => livraisons.filter(l => l.date && l.date.startsWith(selectedMonth)), [livraisons, selectedMonth]);
   const monthAvances = useMemo(() => avances.filter(a => a.mois === selectedMonth && !a.annule), [avances, selectedMonth]);
 
-  // Charger les récupérations du mois sélectionné
-  useEffect(() => {
-    const loadRecuperations = async () => {
-      setLoadingRecup(true);
-      try {
-        const data = await getRecuperationsByMonth(selectedMonth);
-        setRecuperationsMois(data || []);
-      } catch (error) {
-        console.error('Erreur chargement récupérations:', error);
-      } finally {
-        setLoadingRecup(false);
-      }
-    };
-    loadRecuperations();
-  }, [selectedMonth]);
-
   const livsGerant = (arr) => arr.filter(l => shouldCountGerantCommission(l));
 
   const monthStatsByAgent = useMemo(() => agents.map(ag => {
     const ls = monthLivs.filter(l => l.agent_id === ag.id);
     const av = monthAvances.filter(a => a.agent_id === ag.id);
-    const recups = recuperationsMois.filter(r => r.livreur_id === ag.id);
-    const totalRecuperations = recups.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
     return {
       ...ag,
       nbLivs: ls.length,
@@ -55,12 +34,9 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
       totalFrais: ls.reduce((s, l) => s + parseFloat(l.frais || 0), 0),
       totalAvances: av.reduce((s, a) => s + parseFloat(a.montant || 0), 0),
       netSalaire: parseFloat(ag.salaire || 0) - av.reduce((s, a) => s + parseFloat(a.montant || 0), 0),
-      avances: av,
-      recuperations: recups,
-      totalRecuperations: totalRecuperations,
-      nbRecuperations: recups.length
+      avances: av
     };
-  }), [agents, monthLivs, monthAvances, recuperationsMois]);
+  }), [agents, monthLivs, monthAvances]);
 
   const monthTotalMontant = monthLivs
     .filter(l => l.paiement !== 'client')
@@ -69,8 +45,7 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
   const monthTotalFrais = monthLivs.reduce((s, l) => s + parseFloat(l.frais || 0), 0);
   const monthTotalSalaires = monthStatsByAgent.reduce((s, a) => s + parseFloat(a.salaire || 0), 0);
   const monthGerantGain = livsGerant(monthLivs).length * commissionGerant;
-  const monthTotalRecuperations = monthStatsByAgent.reduce((s, a) => s + a.totalRecuperations, 0);
-  const monthBenefice = monthTotalFrais - monthTotalSalaires - monthGerantGain - monthTotalRecuperations;
+  const monthBenefice = monthTotalFrais - monthTotalSalaires - monthGerantGain;
 
   const handleAddAvance = async () => {
     if (!avanceAgentId || !avanceMontant) {
@@ -100,7 +75,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
       showToast('Montant requis', 'error');
       return;
     }
-    // Pour modifier une avance, on l'annule d'abord puis on en crée une nouvelle
     await onAnnulerAvance(editAvanceId);
     const agent = agents.find(a => a.id === parseInt(editAvanceData.agent_id));
     await onAddAvance({
@@ -144,14 +118,13 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
         <div>
           <div style={{ fontSize: 12, color: COLORS.muted, marginBottom: 4 }}>BÉNÉFICE NET — {monthLabel(selectedMonth)}</div>
           <div style={{ fontSize: 30, fontWeight: 900, color: monthBenefice >= 0 ? COLORS.green : COLORS.red }}>{formatAr(monthBenefice)}</div>
-          <div style={{ fontSize: 11, color: COLORS.muted }}>Frais − Salaires − Commission − Récupérations</div>
+          <div style={{ fontSize: 11, color: COLORS.muted }}>Frais − Salaires − Commission gérant</div>
         </div>
         <div style={{ fontSize: 12, color: COLORS.muted, textAlign: 'right' }}>
           <div>Montant colis: <b style={{ color: COLORS.green }}>{formatAr(monthTotalMontant)}</b></div>
           <div>Frais collectés: <b style={{ color: COLORS.orange }}>{formatAr(monthTotalFrais)}</b></div>
           <div>Salaires agents: <b style={{ color: COLORS.red }}>{formatAr(monthTotalSalaires)}</b></div>
           <div>Commission gérant: <b style={{ color: COLORS.pink }}>{formatAr(monthGerantGain)}</b></div>
-          <div>Récupérations: <b style={{ color: '#f59e0b' }}>{formatAr(monthTotalRecuperations)}</b></div>
           <div>{monthLivs.length} livraisons</div>
         </div>
       </div>
@@ -195,7 +168,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
               {a.avances.map(av => (
                 <div key={av.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '8px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   {editAvanceId === av.id ? (
-                    // Mode édition
                     <div style={{ display: 'flex', gap: 8, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                       <input 
                         type="number" 
@@ -259,28 +231,6 @@ export const Recap = ({ livraisons, avances, agents, commissionGerant, onAddAvan
                       )}
                     </>
                   )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Récupérations du mois */}
-          {a.nbRecuperations > 0 && (
-            <div style={{ marginTop: 8, borderTop: '1px solid ' + COLORS.border, paddingTop: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginBottom: 6, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>📦 RÉCUPÉRATIONS MATINALES</span>
-                <span style={{ fontSize: 9, color: COLORS.orange }}>({a.nbRecuperations} récupérations)</span>
-                <span style={{ fontSize: 11, color: '#34d399', marginLeft: 'auto' }}>💰 {formatAr(a.totalRecuperations)}</span>
-              </div>
-              {a.recuperations.map(rec => (
-                <div key={rec.id} style={{ background: COLORS.bg, borderRadius: 7, padding: '6px 10px', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                  <div>
-                    <span style={{ fontSize: 11, color: '#f59e0b' }}>🏪 {rec.client_donneur}</span>
-                    <span style={{ fontSize: 10, color: COLORS.muted, marginLeft: 10 }}>📅 {rec.date}</span>
-                  </div>
-                  <div>
-                    <span style={{ color: COLORS.green, fontWeight: 600 }}>{formatAr(rec.frais_recuperation)}</span>
-                  </div>
                 </div>
               ))}
             </div>
