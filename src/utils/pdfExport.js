@@ -1,11 +1,29 @@
 import { formatAr, STATUTS } from './constants';
 
+// Fonction utilitaire pour obtenir le logo
+const getLogoUrl = (logoUrlParam) => {
+  // Priorité : paramètre passé > localStorage > fichier public par défaut
+  if (logoUrlParam && logoUrlParam !== 'null' && logoUrlParam !== 'undefined') {
+    return logoUrlParam;
+  }
+  try {
+    const saved = localStorage.getItem('aterinay_logo_url');
+    if (saved && saved !== 'null' && saved !== 'undefined') {
+      return saved;
+    }
+  } catch (e) {
+    console.error('Erreur lecture logo:', e);
+  }
+  // Logo par défaut du dossier public
+  return '/logo.png';
+};
+
 export const generateClientPDF = (client, livraisons, recuperation, province, logoUrlParam) => {
   const date = new Date().toISOString().split('T')[0];
   const w = window.open('', '_blank');
   if (!w) { alert('Autorisez les popups'); return; }
   
-  const logoUrl = logoUrlParam || '';
+  const logoUrl = getLogoUrl(logoUrlParam);
   
   const livreesFacturees = livraisons.filter(l => l.statut === 'livre' && l.paiement !== 'client');
   const totalMontant = livreesFacturees.reduce((s, l) => s + parseFloat(l.montant || 0), 0);
@@ -46,9 +64,9 @@ export const generateClientPDF = (client, livraisons, recuperation, province, lo
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'Courier New',monospace;font-size:11px;max-width:180mm;margin:0 auto;padding:8px;color:#000}
-    .header{text-align:center;margin-bottom:15px;padding-bottom:8px;border-bottom:1px solid #000}
-    .logo{width:40px;height:40px;object-fit:contain;margin-bottom:5px}
-    .title{font-size:14px;font-weight:bold;margin:5px 0}
+    .header{text-align:center;margin-bottom:15px;padding-bottom:8px;border-bottom:1px solid #000;display:flex;align-items:center;justify-content:center;gap:10px}
+    .logo{width:40px;height:40px;object-fit:contain}
+    .title{font-size:14px;font-weight:bold}
     .subtitle{font-size:10px;color:#444}
     .client-box{margin:10px 0;padding:8px;border:1px solid #000;background:#f5f5f5}
     .client-name{font-weight:bold;font-size:13px}
@@ -70,9 +88,11 @@ export const generateClientPDF = (client, livraisons, recuperation, province, lo
   </head>
   <body>
     <div class="header">
-      ${logoUrl ? `<img src="${logoUrl}" class="logo" onerror="this.style.display='none'">` : '<div>📦</div>'}
-      <div class="title">ATERINAY SERVICES</div>
-      <div class="subtitle">Relevé de livraisons</div>
+      <img src="${logoUrl}" class="logo" onerror="this.style.display='none'">
+      <div>
+        <div class="title">ATERINAY SERVICES</div>
+        <div class="subtitle">Relevé de livraisons</div>
+      </div>
     </div>
     <div class="client-box">
       <div class="client-name">🏪 CLIENT : ${client}</div>
@@ -98,9 +118,9 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
   const w = window.open('', '_blank');
   if (!w) return;
   
-  const logoUrl = logoUrlParam || '';
+  const logoUrl = getLogoUrl(logoUrlParam);
   
-  // Regrouper par DESTINATAIRE (client qui reçoit le colis)
+  // Regrouper par DESTINATAIRE
   const destinatairesMap = {};
   let grandTotalMontant = 0;
   let grandTotalFrais = 0;
@@ -143,7 +163,6 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
     clientsHtml += `</div>`;
     clientsHtml += `<div class="client-livraisons">`;
     
-    // Liste des livraisons pour ce destinataire
     for (let i = 0; i < data.livraisons.length; i++) {
       const l = data.livraisons[i];
       const montant = l.paiement === 'client' ? 0 : parseFloat(l.montant || 0);
@@ -161,7 +180,6 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
       `;
     }
     
-    // Total pour ce destinataire (montant + frais)
     clientsHtml += `<div class="client-total">`;
     clientsHtml += `<div class="total-line">💰 TOTAL MONTANT : ${formatAr(data.totalMontant)}</div>`;
     clientsHtml += `<div class="total-line">🚚 TOTAL FRAIS : ${formatAr(data.totalFrais)}</div>`;
@@ -180,25 +198,25 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
       body{font-family:'Courier New',monospace;font-size:10px;width:72mm;margin:0 auto;padding:3px;color:#000}
-      .header{text-align:center;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #000}
-      .logo{width:28px;height:28px;object-fit:contain}
-      .title{font-weight:bold;font-size:12px;margin:2px 0}
-      .subtitle{font-size:9px}
+      .header{text-align:center;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #000;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+      .logo{width:25px;height:25px;object-fit:contain}
+      .title{font-weight:bold;font-size:11px}
+      .subtitle{font-size:8px}
       .client-card{border:1px solid #000;margin-bottom:8px;background:#fff}
-      .client-header{background:#000;color:#fff;padding:5px;text-align:center;font-weight:bold;font-size:10px}
-      .client-phone{font-size:8px;margin-top:2px;opacity:0.8}
-      .client-lieu{font-size:8px;margin-top:2px;opacity:0.8}
+      .client-header{background:#000;color:#fff;padding:5px;text-align:center;font-weight:bold;font-size:9px}
+      .client-phone{font-size:7px;margin-top:2px;opacity:0.8}
+      .client-lieu{font-size:7px;margin-top:2px;opacity:0.8}
       .client-livraisons{padding:5px}
       .liv-item{border-bottom:1px solid #ccc;padding:5px 0;margin-bottom:5px}
-      .liv-title{font-weight:bold;font-size:10px;margin-bottom:3px}
-      .liv-row{display:flex;justify-content:space-between;font-size:9px;margin:2px 0}
+      .liv-title{font-weight:bold;font-size:9px;margin-bottom:3px}
+      .liv-row{display:flex;justify-content:space-between;font-size:8px;margin:2px 0}
       .client-total{background:#f0f0f0;padding:5px;border-top:1px solid #ccc}
-      .total-line{display:flex;justify-content:space-between;font-size:9px;margin:2px 0}
+      .total-line{display:flex;justify-content:space-between;font-size:8px;margin:2px 0}
       .grand{font-weight:bold;border-top:1px solid #000;margin-top:3px;padding-top:3px}
       .grand-total{background:#000;color:#fff;padding:6px;margin-top:6px;text-align:center}
-      .gt-row{display:flex;justify-content:space-between;font-size:9px;margin:2px 0}
-      .gt-total{font-weight:bold;border-top:1px solid #444;margin-top:4px;padding-top:4px;font-size:11px}
-      .footer{text-align:center;margin-top:8px;padding-top:4px;border-top:1px solid #ccc;font-size:8px}
+      .gt-row{display:flex;justify-content:space-between;font-size:8px;margin:2px 0}
+      .gt-total{font-weight:bold;border-top:1px solid #444;margin-top:4px;padding-top:4px;font-size:10px}
+      .footer{text-align:center;margin-top:8px;padding-top:4px;border-top:1px solid #ccc;font-size:7px}
       .no-print{text-align:center;margin-top:8px}
       .print-btn{background:#000;color:#fff;border:none;padding:5px 10px;cursor:pointer}
       @media print{.no-print{display:none}}
@@ -206,10 +224,12 @@ export const printAgentList = (agent, livraisons, date, logoUrlParam) => {
   </head>
   <body>
     <div class="header">
-      ${logoUrl ? `<img src="${logoUrl}" class="logo" onerror="this.style.display='none'">` : '<div>📦</div>'}
-      <div class="title">ATERINAY SERVICES</div>
-      <div class="subtitle">Livraisons du ${date}</div>
-      <div class="subtitle">👨‍💼 Livreur : ${agent.nom}</div>
+      <img src="${logoUrl}" class="logo" onerror="this.style.display='none'">
+      <div>
+        <div class="title">ATERINAY SERVICES</div>
+        <div class="subtitle">Livraisons du ${date}</div>
+        <div class="subtitle">👨‍💼 Livreur : ${agent.nom}</div>
+      </div>
     </div>
     ${clientsHtml}
     <div class="grand-total">
