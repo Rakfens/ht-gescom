@@ -8,6 +8,7 @@ const navItems = [
   { key: 'gerant', icon: '🧑‍💼', label: 'Gérant' },
   { key: 'recap', icon: '📈', label: 'Récap' },
   { key: 'agents', icon: '👥', label: 'Agents' },
+  { key: 'recuperation', icon: '📦', label: 'Récupération' }
 ];
 
 export const Sidebar = ({ page, onNavigate, enCours }) => {

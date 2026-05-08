@@ -5,6 +5,7 @@ import { fetchAgents, addAgent, updateAgent, deleteAgent } from './services/agen
 import { fetchLivraisons, addLivraison, updateLivraison, deleteLivraison } from './services/livraisonService';
 import { fetchAvances, addAvance, annulerAvance, deleteAvance } from './services/avanceService';
 import { fetchCommission, updateCommission, fetchLogo } from './services/configService';
+import { fetchRecuperations, addRecuperation, updateRecuperation, deleteRecuperation, getRecuperationsByDate } from './services/recuperationService';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 // Composants
@@ -20,6 +21,7 @@ import { Historique } from './components/Historique/Historique';
 import { Gerant } from './components/Gerant/Gerant';
 import { Recap } from './components/Recap/Recap';
 import { Agents } from './components/Agents/Agents';
+import { Recuperation } from './components/Recuperation/Recuperation';
 
 function AppContent() {
   // États d'authentification
@@ -33,6 +35,7 @@ function AppContent() {
   const [agents, setAgents] = useState([]);
   const [livraisons, setLivraisons] = useState([]);
   const [avances, setAvances] = useState([]);
+  const [recuperations, setRecuperations] = useState([]);
   const [commissionGerant, setCommissionGerant] = useState(COMMISSION_DEFAUT);
   const [logoUrl, setLogoUrl] = useState(null);
   const [toast, setToast] = useState(null);
@@ -67,7 +70,7 @@ function AppContent() {
     };
   }, []);
 
-  // Recharger les données quand la session change
+  // Recharger les données quand la session change (connexion/déconnexion)
   useEffect(() => {
     if (session) {
       loadAllData();
@@ -75,6 +78,7 @@ function AppContent() {
       setAgents([]);
       setLivraisons([]);
       setAvances([]);
+      setRecuperations([]);
     }
   }, [session]);
 
@@ -93,6 +97,10 @@ function AppContent() {
       setAvances(avancesData || []);
       setCommissionGerant(commissionData || COMMISSION_DEFAUT);
       setLogoUrl(logoData);
+      
+      // Charger les récupérations du jour
+      const recupData = await getRecuperationsByDate(TODAY());
+      setRecuperations(recupData || []);
     } catch (error) {
       console.error('Erreur chargement données:', error);
       showToast('Erreur de chargement des données', 'error');
@@ -255,6 +263,44 @@ function AppContent() {
     }
   };
 
+  // Gestion des récupérations
+  const handleAddRecuperation = async (recup) => {
+    try {
+      const newRecup = await addRecuperation(recup);
+      setRecuperations([newRecup, ...recuperations]);
+      showToast('Récupération ajoutée');
+      return newRecup;
+    } catch (error) {
+      console.error('Erreur ajout récupération:', error);
+      showToast('Erreur lors de l\'ajout', 'error');
+      throw error;
+    }
+  };
+
+  const handleUpdateRecuperation = async (id, updates) => {
+    try {
+      await updateRecuperation(id, updates);
+      setRecuperations(recuperations.map(r => r.id === id ? { ...r, ...updates } : r));
+      showToast('Récupération modifiée');
+    } catch (error) {
+      console.error('Erreur modification récupération:', error);
+      showToast('Erreur lors de la modification', 'error');
+      throw error;
+    }
+  };
+
+  const handleDeleteRecuperation = async (id) => {
+    try {
+      await deleteRecuperation(id);
+      setRecuperations(recuperations.filter(r => r.id !== id));
+      showToast('Récupération supprimée', 'warn');
+    } catch (error) {
+      console.error('Erreur suppression récupération:', error);
+      showToast('Erreur lors de la suppression', 'error');
+      throw error;
+    }
+  };
+
   const enCours = livraisons.filter(l => l.statut === 'en_cours').length;
 
   const suggestions = {
@@ -375,6 +421,18 @@ function AppContent() {
                 onUpdateAgent={handleUpdateAgent} 
                 onDeleteAgent={handleDeleteAgent} 
                 showToast={showToast} 
+              />
+            )}
+
+            {page === 'recuperation' && (
+              <Recuperation 
+                agents={agents} 
+                showToast={showToast}
+                onAddRecuperation={handleAddRecuperation}
+                onUpdateRecuperation={handleUpdateRecuperation}
+                onDeleteRecuperation={handleDeleteRecuperation}
+                recuperations={recuperations}
+                setRecuperations={setRecuperations}
               />
             )}
           </div>
