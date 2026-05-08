@@ -43,3 +43,9 @@ export const getRecuperationsByLivreur = async (livreurId, mois) => {
   if (error) throw error;
   return data;
 };
+
+export const getRecuperationsByMonth = async (mois) => {
+  const { data, error } = await supabase.from('recuperations').select('*').eq('date', mois).order('date', { ascending: false });
+  if (error) throw error;
+  return data;
+};
