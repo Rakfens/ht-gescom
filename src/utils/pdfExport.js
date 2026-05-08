@@ -1,12 +1,27 @@
 import { formatAr, STATUTS } from './constants';
 
-export const generateClientPDF = (client, livraisons, recuperation, province, logoUrlParam) => {
+export const generateClientPDF = async (client, livraisons, recuperation, province, logoUrlParam) => {
   const date = new Date().toISOString().split('T')[0];
   const w = window.open('', '_blank');
   if (!w) { alert('Autorisez les popups'); return; }
   
   // Utiliser le logo du dossier public par défaut
-  const logoUrl = '/logo.png';
+  let logoUrl = '/logo.png';
+  
+  // Optionnel : Essayer de récupérer le logo depuis Supabase
+  if (logoUrlParam) {
+    logoUrl = logoUrlParam;
+  } else {
+    try {
+      const { data } = await supabase.from('config').select('valeur').eq('cle', 'logo_url').single();
+      if (data?.valeur) {
+        logoUrl = data.valeur;
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération du logo:', error);
+      // Garder le logo par défaut
+    }
+  }
   
   const livreesFacturees = livraisons.filter(l => l.statut === 'livre' && l.paiement !== 'client');
   const totalMontant = livreesFacturees.reduce((s, l) => s + parseFloat(l.montant || 0), 0);
