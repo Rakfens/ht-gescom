@@ -2,20 +2,59 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <!-- GARDE cette ligne (c'est la plus importante pour le responsive) -->
+    <!-- Vueport optimisé pour mobile et PWA -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover" />
     
-    <!-- GARDE tes autres metas -->
-    <meta name="description" content="Aterinay Services - Logiciel professionnel de gestion de livraisons" />
-    <meta name="theme-color" content="#0b1120" />
+    <!-- SEO et description -->
+    <meta name="description" content="Aterinay Services - Solution complète de gestion pour services de livraison, boutiques accessoires et articles bébé" />
+    <meta name="keywords" content="gestion, livraison, stock, ventes, Madagascar, boutique, accessoires téléphone, articles bébé" />
+    <meta name="author" content="Aterinay Services" />
     
-    <!-- GARDE tes liens vers tes logos -->
+    <!-- Thème (sera mis à jour dynamiquement par l'app) -->
+    <meta name="theme-color" content="#0b1120" id="theme-color" />
+    
+    <!-- PWA / Mobile -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Aterinay Services" />
+    
+    <!-- Favicons -->
     <link rel="apple-touch-icon" href="/logo.png" />
-    <title>Aterinay Services - Gestion de livraisons</title>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    
+    <!-- Préchargement des fonts (optionnel) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <title>Aterinay Services - Gestion multi-sociétés</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- Script pour mettre à jour le theme-color dynamiquement -->
+    <script>
+      // Optionnel: suivre le thème de l'application
+      const updateThemeColor = (theme) => {
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.content = theme === 'dark' ? '#0b1120' : '#f0f8ff';
+        }
+      };
+      
+      // Écouter les changements de thème
+      if (window.MutationObserver) {
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'data-theme') {
+              const theme = document.documentElement.getAttribute('data-theme');
+              updateThemeColor(theme);
+            }
+          });
+        });
+        observer.observe(document.documentElement, { attributes: true });
+      }
+    </script>
   </body>
 </html>

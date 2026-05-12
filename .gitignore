@@ -1,6 +1,37 @@
+# .gitignore
+# Dépendances
 node_modules/
+package-lock.json
+
+# Build
 dist/
+dist-ssr/
+*.local
+
+# Variables d'environnement
 .env
-.DS_Store
+.env.local
+.env.*.local
+
+# Logs
+logs/
 *.log
-.vercel
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vite
+.vite/
+
+# Supabase
+supabase/.temp/
