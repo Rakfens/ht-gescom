@@ -8,22 +8,14 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    open: true,
-    force: true,  // ← AJOUTÉ : force le re-build des dépendances
-    watch: {
-      usePolling: true  // ← AJOUTÉ : utile pour certains systèmes de fichiers
-    }
+    open: true
   },
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true
-      }
-    },
+    minify: false,  // ← Changer 'terser' à false ou 'esbuild'
+    // ou utiliser 'esbuild' plus léger
+    // minify: 'esbuild',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -36,8 +28,5 @@ export default defineConfig({
   preview: {
     port: 4173,
     host: true
-  },
-  optimizeDeps: {
-    force: true  // ← AJOUTÉ : force l'optimisation des dépendances
   }
 });
