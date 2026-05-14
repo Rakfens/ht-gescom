@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
-  "regions": ["cdg1", "fra1", "iad1"],
+  "regions": "cdg1", 
   "functions": {
     "api/*.js": {
       "maxDuration": 10,
