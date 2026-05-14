@@ -1,13 +1,13 @@
-// modules/shared/components/Layout/Header.jsx
+// src/modules/shared/components/Layout/Header.jsx
 import { useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useCompany } from '../../context/CompanyContext';
-import { uploadLogoFile, updateLogo, fetchLogo } from '../../../../modules/livraison/services/configService';    
+import { uploadLogoFile, updateLogo, fetchLogo } from '../../../livraison/services/configService';
 import { CompanySwitcher } from '../common/CompanySwitcher';
 
 export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }) => {
   const { theme, toggleTheme } = useTheme();
-  const { currentCompany, companies } = useCompany();
+  const { currentCompany, companies, switchCompany } = useCompany();
   const fileInputRef = useRef(null);
 
   const handleLogoUpload = async (file) => {
@@ -41,6 +41,20 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
     return '📦';
   };
 
+  // Fonction pour obtenir le logo de la société
+  const getLogoUrl = () => {
+    // Si un logo personnalisé est défini dans la base
+    if (logoUrl) return logoUrl;
+    
+    // Logo par défaut selon la société
+    if (currentCompany?.slug === 'pomanay') return '/logo-pomanay.png';
+    if (currentCompany?.slug === 'zazatiana') return '/logo-zazatiana.png';
+    if (currentCompany?.type === 'service') return '/logo-aterinay.png';
+    
+    // Logo par défaut
+    return '/logo.png';
+  };
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -59,33 +73,36 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {/* Logo */}
         <div style={{ position: 'relative' }}>
-          {logoUrl ? (
-            <img 
-              src={logoUrl} 
-              alt={`Logo ${currentCompany?.name || 'Aterinay'}`} 
-              style={{ 
-                width: 40, 
-                height: 40, 
-                objectFit: 'contain', 
-                borderRadius: 8, 
-                background: '#fff', 
-                padding: 4 
-              }} 
-            />
-          ) : (
-            <div style={{ 
+          <img 
+            src={getLogoUrl()} 
+            alt={`Logo ${currentCompany?.name || 'Aterinay'}`} 
+            style={{ 
               width: 40, 
               height: 40, 
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', 
-              borderRadius: 10, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              fontSize: 20
-            }}>
-              {getCompanyIcon()}
-            </div>
-          )}
+              objectFit: 'contain', 
+              borderRadius: 8, 
+              background: '#fff', 
+              padding: 4 
+            }} 
+            onError={(e) => {
+              e.target.style.display = 'none';
+              if (e.target.nextSibling) {
+                e.target.nextSibling.style.display = 'flex';
+              }
+            }}
+          />
+          <div style={{ 
+            width: 40, 
+            height: 40, 
+            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', 
+            borderRadius: 10, 
+            display: 'none', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            fontSize: 20
+          }}>
+            {getCompanyIcon()}
+          </div>
         </div>
         
         {/* Texte société */}
@@ -113,12 +130,30 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
         </div>
         
         {/* Sélecteur de société (si plusieurs) */}
-        {companies.length > 1 && (
+        {companies?.length > 1 && (
           <div style={{ marginLeft: 4 }}>
             <CompanySwitcher />
           </div>
         )}
       </div>
+
+      {/* Infos société active */}
+      {currentCompany && (
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 8,
+          padding: '4px 12px',
+          background: 'var(--bg)',
+          borderRadius: 20,
+          fontSize: 11
+        }}>
+          <span>{getCompanyIcon()}</span>
+          <span style={{ fontWeight: 500, color: 'var(--text)' }}>
+            {currentCompany.name}
+          </span>
+        </div>
+      )}
 
       {/* Boutons à droite */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -139,7 +174,7 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
           {theme === 'dark' ? '☀️' : '🌙'}
         </button>
         
-        {/* Changer logo */}
+        {/* Changer logo (admin seulement) */}
         <button 
           onClick={() => fileInputRef.current?.click()} 
           style={{ 
