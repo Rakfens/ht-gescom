@@ -1,4 +1,4 @@
-// main.jsx (version avec configuration optionnelle)
+// main.jsx - Version robuste
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -10,14 +10,12 @@ if (import.meta.env.PROD) {
   console.error = () => {};
 }
 
-// Détecter si c'est un environnement mobile
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-if (isMobile) {
-  document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-}
+// Rendu avec gestion des erreurs
+const rootElement = document.getElementById('root');
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+if (rootElement) {
+  // Vider le contenu pour éviter l'erreur #418
+  rootElement.innerHTML = '';
+  
+  ReactDOM.createRoot(rootElement).render(<App />);
+}

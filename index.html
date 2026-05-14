@@ -2,7 +2,6 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="font-src * data:;">
     <!-- Vueport optimisé pour mobile et PWA -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover" />
     
@@ -24,38 +23,17 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <link rel="icon" type="image/png" href="/logo.png" />
     
-    <!-- Préchargement des fonts (optionnel) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <title>HT-GesCo - Gestion multi-sociétés</title>
     
-    <title>Aterinay Services - Gestion multi-sociétés</title>
+    <style>
+      /* Éviter le flash de contenu non stylé */
+      #root {
+        min-height: 100vh;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    
-    <!-- Script pour mettre à jour le theme-color dynamiquement -->
-    <script>
-      // Optionnel: suivre le thème de l'application
-      const updateThemeColor = (theme) => {
-        const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) {
-          meta.content = theme === 'dark' ? '#0b1120' : '#f0f8ff';
-        }
-      };
-      
-      // Écouter les changements de thème
-      if (window.MutationObserver) {
-        const observer = new MutationObserver((mutations) => {
-          mutations.forEach((mutation) => {
-            if (mutation.attributeName === 'data-theme') {
-              const theme = document.documentElement.getAttribute('data-theme');
-              updateThemeColor(theme);
-            }
-          });
-        });
-        observer.observe(document.documentElement, { attributes: true });
-      }
-    </script>
   </body>
 </html>
