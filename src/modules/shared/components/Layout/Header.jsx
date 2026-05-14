@@ -109,7 +109,7 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>
-              Aterinay Services
+              {currentCompany?.name || 'HT-GesCom'}
             </div>
             {currentCompany && (
               <span style={{ 

@@ -64,7 +64,9 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 18 }}>Tableau de bord</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 6 }}>
+        Dashboard {currentCompany?.name}
+      </h1>
       
       {/* Cartes statistiques */}
       <div style={{ 

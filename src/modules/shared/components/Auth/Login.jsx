@@ -69,7 +69,7 @@ export const Login = ({ onLoginSuccess }) => {
         )}
         
         <div style={{ fontSize: 22, fontWeight: 900, color: '#f1f5f9', marginBottom: 4 }}>
-          Aterinay Services
+          HT-GesCom
         </div>
         <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 28 }}>
           Connexion

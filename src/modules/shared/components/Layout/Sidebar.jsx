@@ -66,6 +66,14 @@ export const Sidebar = ({ page, onNavigate, enCours }) => {
     }}>
       {/* En-tête avec le nom de la société */}
       <div style={{ 
+        fontSize: 14, 
+        fontWeight: 700, 
+        color: '#f1f5f9',
+        marginTop: 4
+      }}>
+        {currentCompany?.name}
+      </div>
+      <div style={{ 
         padding: '14px 16px', 
         borderBottom: '1px solid ' + COLORS.border,
         marginBottom: 8
