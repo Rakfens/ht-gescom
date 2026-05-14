@@ -1,36 +1,41 @@
 // src/modules/commerce/services/venteService.js
 import { supabase, getCurrentCompany } from '../../../supabaseClient';
 import { createMouvementStock } from './stockService';
+import { cache } from '../../shared/utils/cache';
 
 // ============ CRUD VENTES ============
 
-// Récupérer toutes les ventes
+// Récupérer toutes les ventes (avec cache)
 export const fetchVentes = async (filters = {}) => {
   const company = getCurrentCompany();
   if (!company) return [];
 
-  let query = supabase
-    .from('ventes')
-    .select('*')
-    .eq('company_id', company.id)
-    .order('date_vente', { ascending: false });
+  const cacheKey = `ventes_${company.id}_${JSON.stringify(filters)}`;
+  
+  return cache.get(cacheKey, async () => {
+    let query = supabase
+      .from('ventes')
+      .select('*')
+      .eq('company_id', company.id)
+      .order('date_vente', { ascending: false });
 
-  if (filters.dateDebut) {
-    query = query.gte('date_vente', filters.dateDebut);
-  }
-  if (filters.dateFin) {
-    query = query.lte('date_vente', filters.dateFin);
-  }
-  if (filters.statut) {
-    query = query.eq('statut', filters.statut);
-  }
-  if (filters.client_nom) {
-    query = query.ilike('client_nom', `%${filters.client_nom}%`);
-  }
+    if (filters.dateDebut) {
+      query = query.gte('date_vente', filters.dateDebut);
+    }
+    if (filters.dateFin) {
+      query = query.lte('date_vente', filters.dateFin);
+    }
+    if (filters.statut) {
+      query = query.eq('statut', filters.statut);
+    }
+    if (filters.client_nom) {
+      query = query.ilike('client_nom', `%${filters.client_nom}%`);
+    }
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }, 60000); // 1 minute de cache
 };
 
 // Récupérer une vente avec ses détails
@@ -38,28 +43,32 @@ export const fetchVenteWithDetails = async (id) => {
   const company = getCurrentCompany();
   if (!company) return null;
 
-  // Récupérer la vente
-  const { data: vente, error: venteError } = await supabase
-    .from('ventes')
-    .select('*')
-    .eq('id', id)
-    .eq('company_id', company.id)
-    .single();
+  const cacheKey = `vente_details_${company.id}_${id}`;
+  
+  return cache.get(cacheKey, async () => {
+    // Récupérer la vente
+    const { data: vente, error: venteError } = await supabase
+      .from('ventes')
+      .select('*')
+      .eq('id', id)
+      .eq('company_id', company.id)
+      .single();
 
-  if (venteError) throw venteError;
+    if (venteError) throw venteError;
 
-  // Récupérer les détails
-  const { data: details, error: detailsError } = await supabase
-    .from('vente_details')
-    .select(`
-      *,
-      produit:produits(id, nom, reference)
-    `)
-    .eq('vente_id', id);
+    // Récupérer les détails
+    const { data: details, error: detailsError } = await supabase
+      .from('vente_details')
+      .select(`
+        *,
+        produit:produits(id, nom, reference, prix_vente)
+      `)
+      .eq('vente_id', id);
 
-  if (detailsError) throw detailsError;
+    if (detailsError) throw detailsError;
 
-  return { ...vente, details };
+    return { ...vente, details: details || [] };
+  }, 300000); // 5 minutes de cache
 };
 
 // Créer une nouvelle vente
@@ -127,6 +136,10 @@ export const createVente = async (venteData, details) => {
     await updateStockAfterSale(item.produit_id, item.quantite, vente.id);
   }
 
+  // Invalider les caches
+  cache.invalidate(`ventes_${company.id}`);
+  cache.invalidate(`ca_${company.id}`);
+  
   return vente;
 };
 
@@ -201,9 +214,13 @@ export const updateVente = async (id, venteData, details) => {
 
     if (detailError) throw detailError;
 
-    // Mettre à jour le stock (diminuer)
     await updateStockAfterSale(item.produit_id, item.quantite, id);
   }
+
+  // Invalider les caches
+  cache.invalidate(`ventes_${company.id}`);
+  cache.invalidate(`vente_details_${company.id}_${id}`);
+  cache.invalidate(`ca_${company.id}`);
 
   return true;
 };
@@ -238,7 +255,13 @@ export const deleteVente = async (id) => {
     .eq('company_id', company.id);
 
   if (error) throw error;
+
+  // Invalider les caches
+  cache.invalidate(`ventes_${company.id}`);
+  cache.invalidate(`ca_${company.id}`);
 };
+
+// ============ FONCTIONS STOCK ============
 
 // Mettre à jour le stock après une vente
 const updateStockAfterSale = async (produitId, quantite, venteId) => {
@@ -314,6 +337,8 @@ const restoreStockAfterUpdate = async (produitId, quantite, venteId) => {
   });
 };
 
+// ============ UTILITAIRES ============
+
 // Générer un numéro de facture unique
 const generateNumeroFacture = async () => {
   const company = getCurrentCompany();
@@ -341,24 +366,134 @@ const generateNumeroFacture = async () => {
   return `FACT-${year}-0001`;
 };
 
-// ============ STATISTIQUES VENTES ============
+// ============ STATISTIQUES ============
 
-// Chiffre d'affaires par période
+// Chiffre d'affaires par période (avec cache)
 export const getCA = async (dateDebut, dateFin) => {
   const company = getCurrentCompany();
   if (!company) return 0;
 
-  let query = supabase
-    .from('ventes')
-    .select('montant_total')
-    .eq('company_id', company.id)
-    .eq('statut', 'paye');
+  const cacheKey = `ca_${company.id}_${dateDebut}_${dateFin}`;
+  
+  return cache.get(cacheKey, async () => {
+    let query = supabase
+      .from('ventes')
+      .select('montant_total')
+      .eq('company_id', company.id)
+      .eq('statut', 'paye');
 
-  if (dateDebut) query = query.gte('date_vente', dateDebut);
-  if (dateFin) query = query.lte('date_vente', dateFin);
+    if (dateDebut) query = query.gte('date_vente', dateDebut);
+    if (dateFin) query = query.lte('date_vente', dateFin);
 
-  const { data, error } = await query;
-  if (error) throw error;
+    const { data, error } = await query;
+    if (error) throw error;
 
-  return data.reduce((sum, v) => sum + (v.montant_total || 0), 0);
+    return data.reduce((sum, v) => sum + (v.montant_total || 0), 0);
+  }, 300000); // 5 minutes
+};
+
+// Top produits vendus (version avec fonction SQL)
+export const getTopProduits = async (limit = 10, dateDebut, dateFin) => {
+  const company = getCurrentCompany();
+  if (!company) return [];
+
+  const cacheKey = `top_produits_${company.id}_${dateDebut}_${dateFin}_${limit}`;
+  
+  return cache.get(cacheKey, async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+      
+      const startDate = dateDebut || firstDayOfMonth;
+      const endDate = dateFin || today;
+
+      const { data, error } = await supabase
+        .rpc('get_top_produits', {
+          p_company_id: company.id,
+          p_date_debut: startDate,
+          p_date_fin: endDate,
+          p_limit: limit
+        });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Erreur getTopProduits:', error);
+      return [];
+    }
+  }, 300000); // 5 minutes
+};
+
+// Ventes par jour
+export const getVentesByDay = async (date) => {
+  const company = getCurrentCompany();
+  if (!company) return [];
+
+  const cacheKey = `ventes_day_${company.id}_${date}`;
+  
+  return cache.get(cacheKey, async () => {
+    const { data, error } = await supabase
+      .from('ventes')
+      .select('*')
+      .eq('company_id', company.id)
+      .eq('date_vente', date)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }, 60000); // 1 minute
+};
+
+// Ventes par mois
+export const getVentesByMonth = async (annee, mois) => {
+  const company = getCurrentCompany();
+  if (!company) return [];
+
+  const cacheKey = `ventes_month_${company.id}_${annee}_${mois}`;
+  
+  return cache.get(cacheKey, async () => {
+    const dateDebut = `${annee}-${String(mois).padStart(2, '0')}-01`;
+    const dateFin = `${annee}-${String(mois).padStart(2, '0')}-31`;
+
+    const { data, error } = await supabase
+      .from('ventes')
+      .select('*')
+      .eq('company_id', company.id)
+      .gte('date_vente', dateDebut)
+      .lte('date_vente', dateFin)
+      .order('date_vente', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }, 300000); // 5 minutes
+};
+
+// Nombre de ventes par statut
+export const getVentesStats = async () => {
+  const company = getCurrentCompany();
+  if (!company) return { paye: 0, credit: 0, en_attente: 0, annule: 0 };
+
+  const cacheKey = `ventes_stats_${company.id}`;
+  
+  return cache.get(cacheKey, async () => {
+    const { data, error } = await supabase
+      .from('ventes')
+      .select('statut')
+      .eq('company_id', company.id);
+
+    if (error) throw error;
+
+    const stats = {
+      paye: 0,
+      credit: 0,
+      en_attente: 0,
+      annule: 0
+    };
+
+    (data || []).forEach(v => {
+      if (stats[v.statut] !== undefined) stats[v.statut]++;
+    });
+
+    return stats;
+  }, 300000); // 5 minutes
 };

@@ -1,4 +1,4 @@
-// modules/commerce/services/inventaireService.js
+// src/modules/commerce/services/inventaireService.js
 import { supabase, getCurrentCompany } from '../../../supabaseClient';
 
 // Récupérer l'inventaire en cours
@@ -12,11 +12,15 @@ export const getCurrentInventory = async () => {
     .eq('company_id', company.id)
     .eq('statut', 'en_cours')
     .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    .limit(1);
 
-  if (error && error.code !== 'PGRST116') throw error;
-  return data;
+  // Gérer le cas où aucune donnée n'existe (code 406/PGRST116)
+  if (error && (error.code === 'PGRST116' || error.message?.includes('JSON object requested'))) {
+    return null;
+  }
+  if (error) throw error;
+  
+  return data && data.length > 0 ? data[0] : null;
 };
 
 // Démarrer un nouvel inventaire
@@ -64,7 +68,59 @@ export const getProductsForInventory = async (categorie = null) => {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data;
+  return data || [];
+};
+
+// Récupérer les produits déjà comptés
+export const getCountedProducts = async (inventoryId) => {
+  const company = getCurrentCompany();
+  if (!company) return [];
+
+  const { data, error } = await supabase
+    .from('inventaire_details')
+    .select(`
+      *,
+      produit:produits(id, nom, reference, categorie)
+    `)
+    .eq('inventaire_id', inventoryId);
+
+  if (error) throw error;
+  return data || [];
+};
+
+// Récupérer les produits non encore comptés
+export const getUncountedProducts = async (inventoryId, categorie = null) => {
+  const company = getCurrentCompany();
+  if (!company) return [];
+
+  // Récupérer les IDs des produits déjà comptés
+  const { data: counted, error: countedError } = await supabase
+    .from('inventaire_details')
+    .select('produit_id')
+    .eq('inventaire_id', inventoryId);
+
+  if (countedError) throw countedError;
+
+  const countedIds = counted?.map(c => c.produit_id) || [];
+
+  // Récupérer tous les produits actifs
+  let query = supabase
+    .from('produits')
+    .select('*')
+    .eq('company_id', company.id)
+    .eq('is_active', true)
+    .order('nom');
+
+  if (categorie) {
+    query = query.eq('categorie', categorie);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // Filtrer les produits non comptés
+  const uncounted = (data || []).filter(p => !countedIds.includes(p.id));
+  return uncounted;
 };
 
 // Enregistrer le comptage d'un produit
@@ -139,59 +195,6 @@ export const recordCount = async (inventoryId, productId, actualQuantity, notes 
   };
 };
 
-// Récupérer les produits déjà comptés
-export const getCountedProducts = async (inventoryId) => {
-  const company = getCurrentCompany();
-  if (!company) return [];
-
-  const { data, error } = await supabase
-    .from('inventaire_details')
-    .select(`
-      *,
-      produit:produits(id, nom, reference, categorie)
-    `)
-    .eq('inventaire_id', inventoryId);
-
-  if (error) throw error;
-  return data;
-};
-
-// Récupérer les produits non encore comptés
-export const getUncountedProducts = async (inventoryId, categorie = null) => {
-  const company = getCurrentCompany();
-  if (!company) return [];
-
-  // Récupérer les IDs des produits déjà comptés
-  const { data: counted, error: countedError } = await supabase
-    .from('inventaire_details')
-    .select('produit_id')
-    .eq('inventaire_id', inventoryId);
-
-  if (countedError) throw countedError;
-
-  const countedIds = counted.map(c => c.produit_id);
-
-  // Récupérer les produits non comptés
-  let query = supabase
-    .from('produits')
-    .select('*')
-    .eq('company_id', company.id)
-    .eq('is_active', true)
-    .order('nom');
-
-  if (countedIds.length > 0) {
-    query = query.not('id', 'in', `(${countedIds.join(',')})`);
-  }
-
-  if (categorie) {
-    query = query.eq('categorie', categorie);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
-};
-
 // Terminer l'inventaire et appliquer les corrections
 export const finishInventory = async (inventoryId) => {
   const company = getCurrentCompany();
@@ -202,7 +205,7 @@ export const finishInventory = async (inventoryId) => {
     .from('inventaire_details')
     .select('*')
     .eq('inventaire_id', inventoryId)
-    .neq('ecart', 0);
+    .not('ecart', 'eq', 0);
 
   if (diffError) throw diffError;
 
@@ -246,7 +249,7 @@ export const finishInventory = async (inventoryId) => {
 
   return {
     success: true,
-    corrections_appliquees: differences.length
+    corrections_appliquees: differences?.length || 0
   };
 };
 
@@ -280,7 +283,7 @@ export const getInventoryHistory = async (limit = 50) => {
     .limit(limit);
 
   if (error) throw error;
-  return data;
+  return data || [];
 };
 
 // Récupérer les détails d'un inventaire terminé
@@ -301,7 +304,7 @@ export const getInventoryDetails = async (inventoryId) => {
     .from('inventaire_details')
     .select(`
       *,
-      produit:produits(id, nom, reference, categorie)
+      produit:produits(id, nom, reference, categorie, unite)
     `)
     .eq('inventaire_id', inventoryId)
     .order('produit_id');
@@ -309,13 +312,13 @@ export const getInventoryDetails = async (inventoryId) => {
   if (detailsError) throw detailsError;
 
   // Calculer les statistiques
-  const totalProducts = details.length;
-  const productsWithDifference = details.filter(d => d.ecart !== 0).length;
-  const totalDifference = details.reduce((sum, d) => sum + Math.abs(d.ecart), 0);
+  const totalProducts = details?.length || 0;
+  const productsWithDifference = details?.filter(d => d.ecart !== 0).length || 0;
+  const totalDifference = details?.reduce((sum, d) => sum + Math.abs(d.ecart), 0) || 0;
 
   return {
     ...inventory,
-    details,
+    details: details || [],
     stats: {
       total_products: totalProducts,
       products_with_difference: productsWithDifference,

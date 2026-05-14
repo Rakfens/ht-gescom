@@ -1,6 +1,9 @@
 // src/modules/livraison/services/recuperationService.js
 import { supabase, getCurrentCompany } from '../../../supabaseClient';
 
+// ==================== REQUÊTES DE BASE ====================
+
+// Récupérer toutes les récupérations de la société actuelle
 export const fetchRecuperations = async () => {
   try {
     const company = getCurrentCompany();
@@ -21,6 +24,73 @@ export const fetchRecuperations = async () => {
   }
 };
 
+// Récupérer les récupérations par date (version corrigée)
+export const getRecuperationsByDate = async (date) => {
+  try {
+    const company = getCurrentCompany();
+    if (!company) return [];
+
+    console.log('getRecuperationsByDate - Date:', date);
+    
+    const { data, error } = await supabase
+      .from('recuperations')
+      .select('*')
+      .eq('company_id', company.id)
+      .eq('date', date)
+      .order('livreur_nom');
+    
+    if (error) throw error;
+    
+    console.log(`getRecuperationsByDate - ${date}:`, data?.length || 0, 'récupérations');
+    return data || [];
+  } catch (error) {
+    console.error('getRecuperationsByDate - Erreur:', error);
+    return [];
+  }
+};
+
+// Récupérer les récupérations par mois (version corrigée sans ilike)
+export const getRecuperationsByMonth = async (mois) => {
+  try {
+    const company = getCurrentCompany();
+    if (!company) return [];
+
+    console.log('getRecuperationsByMonth - Mois recherché:', mois);
+    
+    // Convertir le mois en plage de dates
+    const year = mois.split('-')[0];
+    const month = mois.split('-')[1];
+    const startDate = `${year}-${month}-01`;
+    
+    // Calculer le dernier jour du mois
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}`;
+    
+    const { data, error } = await supabase
+      .from('recuperations')
+      .select('*')
+      .eq('company_id', company.id)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: false });
+    
+    if (error) throw error;
+    
+    console.log(`getRecuperationsByMonth - ${mois}:`, data?.length || 0, 'récupérations');
+    
+    if (data && data.length > 0) {
+      const dates = data.map(r => r.date);
+      console.log('Dates trouvées:', dates);
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('getRecuperationsByMonth - Erreur:', error);
+    return [];
+  }
+};
+
+// Ajouter une récupération
 export const addRecuperation = async (recuperation) => {
   try {
     const company = getCurrentCompany();
@@ -39,7 +109,7 @@ export const addRecuperation = async (recuperation) => {
       livreur_nom: recuperation.livreur_nom,
       client_donneur: recuperation.client_donneur,
       frais_recuperation: parseFloat(recuperation.frais_recuperation) || 1000,
-      company_id: company.id  // ← AJOUT multi-sociétés
+      company_id: company.id
     };
     
     console.log('addRecuperation - Données à insérer:', insertData);
@@ -59,6 +129,7 @@ export const addRecuperation = async (recuperation) => {
   }
 };
 
+// Mettre à jour une récupération
 export const updateRecuperation = async (id, updates) => {
   try {
     const company = getCurrentCompany();
@@ -70,7 +141,7 @@ export const updateRecuperation = async (id, updates) => {
       .from('recuperations')
       .update(updates)
       .eq('id', id)
-      .eq('company_id', company.id)  // ← AJOUT sécurité multi-sociétés
+      .eq('company_id', company.id)
       .select();
     
     if (error) throw error;
@@ -83,6 +154,7 @@ export const updateRecuperation = async (id, updates) => {
   }
 };
 
+// Supprimer une récupération
 export const deleteRecuperation = async (id) => {
   try {
     const company = getCurrentCompany();
@@ -94,7 +166,7 @@ export const deleteRecuperation = async (id) => {
       .from('recuperations')
       .delete()
       .eq('id', id)
-      .eq('company_id', company.id);  // ← AJOUT sécurité multi-sociétés
+      .eq('company_id', company.id);
     
     if (error) throw error;
     
@@ -105,60 +177,9 @@ export const deleteRecuperation = async (id) => {
   }
 };
 
-export const getRecuperationsByDate = async (date) => {
-  try {
-    const company = getCurrentCompany();
-    if (!company) return [];
+// ==================== REQUÊTES SPÉCIFIQUES ====================
 
-    console.log('getRecuperationsByDate - Date:', date);
-    
-    const { data, error } = await supabase
-      .from('recuperations')
-      .select('*')
-      .eq('date', date)
-      .eq('company_id', company.id)  // ← AJOUT multi-sociétés
-      .order('livreur_nom');
-    
-    if (error) throw error;
-    
-    console.log(`getRecuperationsByDate - ${date}:`, data?.length || 0, 'récupérations');
-    return data || [];
-  } catch (error) {
-    console.error('getRecuperationsByDate - Erreur:', error);
-    return [];
-  }
-};
-
-export const getRecuperationsByMonth = async (mois) => {
-  try {
-    const company = getCurrentCompany();
-    if (!company) return [];
-
-    console.log('getRecuperationsByMonth - Mois recherché:', mois);
-    
-    const { data, error } = await supabase
-      .from('recuperations')
-      .select('*')
-      .eq('company_id', company.id)  // ← AJOUT multi-sociétés
-      .ilike('date', `${mois}%`)
-      .order('date', { ascending: false });
-    
-    if (error) throw error;
-    
-    console.log(`getRecuperationsByMonth - ${mois}:`, data?.length || 0, 'récupérations');
-    
-    if (data && data.length > 0) {
-      const dates = data.map(r => r.date);
-      console.log('Dates trouvées:', dates);
-    }
-    
-    return data || [];
-  } catch (error) {
-    console.error('getRecuperationsByMonth - Erreur:', error);
-    return [];
-  }
-};
-
+// Récupérer les récupérations par livreur (par ID)
 export const getRecuperationsByLivreur = async (livreurId, mois) => {
   try {
     const company = getCurrentCompany();
@@ -175,10 +196,15 @@ export const getRecuperationsByLivreur = async (livreurId, mois) => {
       .from('recuperations')
       .select('*')
       .eq('livreur_id', livreurId)
-      .eq('company_id', company.id);  // ← AJOUT multi-sociétés
+      .eq('company_id', company.id);
     
     if (mois) {
-      query = query.ilike('date', `${mois}%`);
+      const year = mois.split('-')[0];
+      const month = mois.split('-')[1];
+      const startDate = `${year}-${month}-01`;
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const endDate = `${year}-${month}-${lastDay}`;
+      query = query.gte('date', startDate).lte('date', endDate);
     }
     
     const { data, error } = await query.order('date', { ascending: false });
@@ -193,6 +219,7 @@ export const getRecuperationsByLivreur = async (livreurId, mois) => {
   }
 };
 
+// Récupérer les récupérations par livreur (par nom)
 export const getRecuperationsByLivreurNom = async (livreurNom, mois) => {
   try {
     const company = getCurrentCompany();
@@ -209,10 +236,15 @@ export const getRecuperationsByLivreurNom = async (livreurNom, mois) => {
       .from('recuperations')
       .select('*')
       .eq('livreur_nom', livreurNom)
-      .eq('company_id', company.id);  // ← AJOUT multi-sociétés
+      .eq('company_id', company.id);
     
     if (mois) {
-      query = query.ilike('date', `${mois}%`);
+      const year = mois.split('-')[0];
+      const month = mois.split('-')[1];
+      const startDate = `${year}-${month}-01`;
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const endDate = `${year}-${month}-${lastDay}`;
+      query = query.gte('date', startDate).lte('date', endDate);
     }
     
     const { data, error } = await query.order('date', { ascending: false });
@@ -234,6 +266,7 @@ export const getRecuperationsByLivreurNom = async (livreurNom, mois) => {
   }
 };
 
+// Total cumulé des récupérations par livreur (par nom)
 export const getTotalRecuperationsByLivreurNom = async (livreurNom) => {
   try {
     const company = getCurrentCompany();
@@ -249,7 +282,7 @@ export const getTotalRecuperationsByLivreurNom = async (livreurNom) => {
       .from('recuperations')
       .select('frais_recuperation, date, client_donneur')
       .eq('livreur_nom', livreurNom)
-      .eq('company_id', company.id)  // ← AJOUT multi-sociétés
+      .eq('company_id', company.id)
       .order('date', { ascending: false });
     
     if (error) throw error;
@@ -273,6 +306,7 @@ export const getTotalRecuperationsByLivreurNom = async (livreurNom) => {
   }
 };
 
+// Total cumulé des récupérations par livreur (par ID)
 export const getTotalRecuperationsByLivreur = async (livreurId) => {
   try {
     const company = getCurrentCompany();
@@ -288,7 +322,7 @@ export const getTotalRecuperationsByLivreur = async (livreurId) => {
       .from('recuperations')
       .select('frais_recuperation')
       .eq('livreur_id', livreurId)
-      .eq('company_id', company.id);  // ← AJOUT multi-sociétés
+      .eq('company_id', company.id);
     
     if (error) throw error;
     
@@ -303,6 +337,7 @@ export const getTotalRecuperationsByLivreur = async (livreurId) => {
   }
 };
 
+// Récupérer toutes les récupérations d'un livreur par nom
 export const getAllRecuperationsByLivreurNom = async (livreurNom) => {
   try {
     const company = getCurrentCompany();
@@ -318,7 +353,7 @@ export const getAllRecuperationsByLivreurNom = async (livreurNom) => {
       .from('recuperations')
       .select('*')
       .eq('livreur_nom', livreurNom)
-      .eq('company_id', company.id)  // ← AJOUT multi-sociétés
+      .eq('company_id', company.id)
       .order('date', { ascending: false });
     
     if (error) throw error;
@@ -331,6 +366,7 @@ export const getAllRecuperationsByLivreurNom = async (livreurNom) => {
   }
 };
 
+// Statistiques des récupérations par mois
 export const getRecuperationsStatsByMonth = async (mois) => {
   try {
     const company = getCurrentCompany();
@@ -338,14 +374,22 @@ export const getRecuperationsStatsByMonth = async (mois) => {
     
     console.log('getRecuperationsStatsByMonth - Mois:', mois);
     
+    const year = mois.split('-')[0];
+    const month = mois.split('-')[1];
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}`;
+    
     const { data, error } = await supabase
       .from('recuperations')
       .select('*')
-      .eq('company_id', company.id)  // ← AJOUT multi-sociétés
-      .ilike('date', `${mois}%`);
+      .eq('company_id', company.id)
+      .gte('date', startDate)
+      .lte('date', endDate);
     
     if (error) throw error;
     
+    // Grouper par livreur
     const stats = {};
     data.forEach(recup => {
       const nom = recup.livreur_nom;

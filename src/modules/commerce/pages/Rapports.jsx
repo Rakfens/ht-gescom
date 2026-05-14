@@ -1,7 +1,8 @@
-// modules/commerce/pages/Rapports.jsx
+
+// src/modules/commerce/pages/Rapports.jsx
 import { useState, useEffect } from 'react';
 import { useCompany } from '../../shared/context/CompanyContext';
-import { fetchVentes, getCA } from '../services/venteService';
+import { fetchVentes, getCA, getTopProduits } from '../services/venteService';
 import { fetchAchats, getTotalAchats } from '../services/achatService';
 import { fetchProduits, getAlertesStockBas } from '../services/produitService';
 import { supabase, getCurrentCompany } from '../../../supabaseClient';
@@ -36,27 +37,32 @@ export default function Rapports() {
       const company = getCurrentCompany();
       if (!company) return;
 
-      const [ca, ventes, achats, produits, alertes] = await Promise.all([
-        getCA(dateDebut, dateFin),
-        fetchVentes({ dateDebut, dateFin }),
-        getTotalAchats(dateDebut, dateFin),
-        fetchProduits(),
-        getAlertesStockBas()
-      ]);
+      console.log('📊 Chargement des rapports pour:', company.name);
+      console.log('📅 Période:', dateDebut, '→', dateFin);
 
+      // 1. Chiffre d'affaires
+      const ca = await getCA(dateDebut, dateFin);
+      console.log('💰 CA:', ca);
+
+      // 2. Ventes
+      const ventes = await fetchVentes({ dateDebut, dateFin });
       const totalVentes = ventes.length;
-      const marge = ca - achats;
+      console.log('📦 Nombre de ventes:', totalVentes);
 
-      setStats({
-        ca,
-        totalVentes,
-        totalAchats: achats,
-        marge,
-        nbProduits: produits.length,
-        alertesStock: alertes.length
-      });
+      // 3. Achats
+      const achats = await getTotalAchats(dateDebut, dateFin);
+      console.log('📥 Total achats:', achats);
 
-      // Ventes par jour
+      // 4. Produits
+      const produits = await fetchProduits();
+      const alertes = await getAlertesStockBas();
+
+      // 5. Top produits (NOUVELLE VERSION avec RPC)
+      const top = await getTopProduits(10, dateDebut, dateFin);
+      console.log('🏆 Top produits:', top?.length || 0);
+      setTopProduits(top || []);
+
+      // 6. Ventes par jour
       const ventesParJourMap = new Map();
       ventes.forEach(v => {
         const date = v.date_vente.split('T')[0];
@@ -64,31 +70,7 @@ export default function Rapports() {
       });
       setVentesParJour(Array.from(ventesParJourMap.entries()).map(([date, total]) => ({ date, total })).sort((a, b) => a.date.localeCompare(b.date)));
 
-      // Top produits
-      const { data: top } = await supabase
-        .from('vente_details')
-        .select('produit_id, produits(nom), quantite, sous_total')
-        .eq('ventes.company_id', company.id)
-        .gte('ventes.date_vente', dateDebut)
-        .lte('ventes.date_vente', dateFin);
-
-      const produitsMap = new Map();
-      top?.forEach(item => {
-        const produitId = item.produit_id;
-        if (!produitsMap.has(produitId)) {
-          produitsMap.set(produitId, {
-            nom: item.produits?.nom || 'Produit',
-            quantite: 0,
-            chiffre: 0
-          });
-        }
-        const p = produitsMap.get(produitId);
-        p.quantite += item.quantite;
-        p.chiffre += item.sous_total;
-      });
-      setTopProduits(Array.from(produitsMap.values()).sort((a, b) => b.chiffre - a.chiffre).slice(0, 10));
-
-      // Dépenses (si Pomanay)
+      // 7. Dépenses (uniquement pour Pomanay)
       if (currentCompany.slug === 'pomanay') {
         const { data: depensesData } = await supabase
           .from('depenses')
@@ -99,34 +81,76 @@ export default function Rapports() {
           .order('date_depense', { ascending: false });
         setDepenses(depensesData || []);
       }
+
+      setStats({
+        ca,
+        totalVentes,
+        totalAchats: achats,
+        marge: ca - achats,
+        nbProduits: produits.length,
+        alertesStock: alertes.length
+      });
+
     } catch (error) {
-      console.error('Erreur chargement rapports:', error);
+      console.error('❌ Erreur chargement rapports:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const periodOptions = [
-    { value: 'aujourdhui', label: 'Aujourd\'hui', getDates: () => ({ debut: new Date().toISOString().split('T')[0], fin: new Date().toISOString().split('T')[0] }) },
-    { value: 'semaine', label: 'Cette semaine', getDates: () => {
-      const today = new Date();
-      const firstDay = new Date(today.setDate(today.getDate() - today.getDay()));
-      return { debut: firstDay.toISOString().split('T')[0], fin: new Date().toISOString().split('T')[0] };
-    }},
-    { value: 'mois', label: 'Ce mois', getDates: () => ({
-      debut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-      fin: new Date().toISOString().split('T')[0]
-    })},
-    { value: 'trimestre', label: 'Ce trimestre', getDates: () => {
-      const now = new Date();
-      const quarter = Math.floor(now.getMonth() / 3);
-      const firstDay = new Date(now.getFullYear(), quarter * 3, 1);
-      return { debut: firstDay.toISOString().split('T')[0], fin: new Date().toISOString().split('T')[0] };
-    }},
-    { value: 'annee', label: 'Cette année', getDates: () => ({
-      debut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
-      fin: new Date().toISOString().split('T')[0]
-    })}
+    { 
+      value: 'aujourdhui', 
+      label: 'Aujourd\'hui', 
+      getDates: () => ({ 
+        debut: new Date().toISOString().split('T')[0], 
+        fin: new Date().toISOString().split('T')[0] 
+      }) 
+    },
+    { 
+      value: 'semaine', 
+      label: 'Cette semaine', 
+      getDates: () => {
+        const today = new Date();
+        const firstDay = new Date(today);
+        const day = firstDay.getDay();
+        const diff = day === 0 ? 6 : day - 1;
+        firstDay.setDate(today.getDate() - diff);
+        return { 
+          debut: firstDay.toISOString().split('T')[0], 
+          fin: new Date().toISOString().split('T')[0] 
+        };
+      }
+    },
+    { 
+      value: 'mois', 
+      label: 'Ce mois', 
+      getDates: () => ({
+        debut: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+        fin: new Date().toISOString().split('T')[0]
+      })
+    },
+    { 
+      value: 'trimestre', 
+      label: 'Ce trimestre', 
+      getDates: () => {
+        const now = new Date();
+        const quarter = Math.floor(now.getMonth() / 3);
+        const firstDay = new Date(now.getFullYear(), quarter * 3, 1);
+        return { 
+          debut: firstDay.toISOString().split('T')[0], 
+          fin: new Date().toISOString().split('T')[0] 
+        };
+      }
+    },
+    { 
+      value: 'annee', 
+      label: 'Cette année', 
+      getDates: () => ({
+        debut: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+        fin: new Date().toISOString().split('T')[0]
+      })
+    }
   ];
 
   const handlePeriodChange = (value) => {
@@ -147,7 +171,18 @@ export default function Rapports() {
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 8, background: COLORS.card, borderRadius: 10, padding: 4 }}>
           {periodOptions.map(opt => (
-            <button key={opt.value} onClick={() => handlePeriodChange(opt.value)} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: period === opt.value ? COLORS.blue : 'transparent', color: period === opt.value ? '#fff' : COLORS.subtle, cursor: 'pointer' }}>
+            <button 
+              key={opt.value} 
+              onClick={() => handlePeriodChange(opt.value)} 
+              style={{ 
+                padding: '8px 16px', 
+                border: 'none', 
+                borderRadius: 8, 
+                background: period === opt.value ? COLORS.blue : 'transparent', 
+                color: period === opt.value ? '#fff' : COLORS.subtle, 
+                cursor: 'pointer' 
+              }}
+            >
               {opt.label}
             </button>
           ))}
@@ -168,7 +203,7 @@ export default function Rapports() {
         <KpiCard title="Alertes stock" value={stats.alertesStock} icon="⚠️" color={COLORS.red} />
       </div>
 
-      {/* Ventes par jour (graphique simplifié) */}
+      {/* Ventes par jour */}
       {ventesParJour.length > 0 && (
         <div style={{ background: COLORS.card, borderRadius: 12, border: `1px solid ${COLORS.border2}`, padding: 20, marginBottom: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>📈 Évolution des ventes</h3>
@@ -208,7 +243,7 @@ export default function Rapports() {
                 {topProduits.map((p, idx) => (
                   <tr key={idx} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <td style={{ padding: 8, color: COLORS.muted }}>{idx + 1}</td>
-                    <td style={{ padding: 8 }}>{p.nom}</td>
+                    <td style={{ padding: 8 }}>{p.produit_nom || p.produit?.nom || '-'}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{p.quantite}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatAr(p.chiffre)}</td>
                   </tr>
@@ -227,17 +262,21 @@ export default function Rapports() {
             {Object.entries(depenses.reduce((acc, d) => {
               acc[d.categorie] = (acc[d.categorie] || 0) + d.montant;
               return acc;
-            }, {})).map(([categorie, total]) => (
-              <div key={categorie}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 13 }}>{categorie}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{formatAr(total)}</span>
+            }, {})).map(([categorie, total]) => {
+              const totalDepenses = depenses.reduce((s, d) => s + d.montant, 0);
+              const percentage = totalDepenses > 0 ? (total / totalDepenses) * 100 : 0;
+              return (
+                <div key={categorie}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13 }}>{categorie}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{formatAr(total)} ({percentage.toFixed(1)}%)</span>
+                  </div>
+                  <div style={{ background: COLORS.bg, height: 8, borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${percentage}%`, background: COLORS.red, height: '100%' }} />
+                  </div>
                 </div>
-                <div style={{ background: COLORS.bg, height: 8, borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ width: `${(total / depenses.reduce((s, d) => s + d.montant, 0)) * 100}%`, background: COLORS.red, height: '100%' }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
