@@ -64,7 +64,7 @@ function AppContent() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [logoUrl, setLogoUrl] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [dataReloadKey, setDataReloadKey] = useState(0);
 
   // Détection mobile
   useEffect(() => {
@@ -75,29 +75,13 @@ function AppContent() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Écouter les changements de société
+  // Recharger les données quand la société change
   useEffect(() => {
-    const handleCompanyChange = (event) => {
-      console.log('🏢 Société changée vers:', event.detail?.name);
-      // Recharger la page pour éviter les problèmes d'état
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
-    };
-    
-    window.addEventListener('companyChanged', handleCompanyChange);
-    return () => window.removeEventListener('companyChanged', handleCompanyChange);
-  }, []);
-
-  // Initialisation après chargement
-  useEffect(() => {
-    if (!authLoading && !companyLoading && session) {
-      setIsInitialized(true);
-      console.log('✅ Application initialisée');
-      console.log('🏢 Sociétés disponibles:', companies.length);
-      console.log('🏢 Société courante:', currentCompany?.name);
+    if (currentCompany) {
+      console.log('🔄 Société changée vers:', currentCompany.name);
+      setDataReloadKey(prev => prev + 1);
     }
-  }, [authLoading, companyLoading, session, companies, currentCompany]);
+  }, [currentCompany]);
 
   const nav = (p) => {
     setPage(p);
@@ -112,17 +96,14 @@ function AppContent() {
     lieux: [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])]
   };
 
-  // Écran de chargement
   if (authLoading || companyLoading) {
     return <Loader message="Chargement de l'application..." />;
   }
 
-  // Page de connexion
   if (!session) {
     return <Login onLoginSuccess={() => window.location.reload()} />;
   }
 
-  // Sélection des sociétés
   if (companies.length === 0) {
     return (
       <div style={{ 
@@ -141,7 +122,16 @@ function AppContent() {
     );
   }
 
-  // Sélecteur de société (si plusieurs sociétés)
+  // Si une seule société, la sélectionner automatiquement (sans rechargement)
+  if (companies.length === 1 && !currentCompany) {
+    const singleCompany = companies[0];
+    localStorage.setItem('currentCompany', JSON.stringify(singleCompany));
+    // Recharger la page une seule fois pour initialiser
+    window.location.reload();
+    return <Loader message="Initialisation..." />;
+  }
+
+  // Sélecteur de société (si plusieurs sociétés et aucune sélectionnée)
   if (companies.length > 1 && !currentCompany) {
     return (
       <div style={{ 
@@ -182,12 +172,8 @@ function AppContent() {
     );
   }
 
-  // Si une seule société, la sélectionner automatiquement
-  if (companies.length === 1 && !currentCompany) {
-    const singleCompany = companies[0];
-    localStorage.setItem('currentCompany', JSON.stringify(singleCompany));
-    window.location.reload();
-    return <Loader message="Sélection de la société..." />;
+  if (!currentCompany) {
+    return <Loader message="Chargement de la société..." />;
   }
 
   // Rendu selon le type de société
@@ -198,6 +184,7 @@ function AppContent() {
         case 'dashboard':
           return (
             <ServiceDashboard 
+              key={dataReloadKey}
               agents={agents} 
               livraisons={livraisons} 
               commissionGerant={500}
@@ -280,7 +267,7 @@ function AppContent() {
     // Pomanay ou Zazatiana (type: commerce)
     switch (page) {
       case 'dashboard':
-        return <CommerceDashboard />;
+        return <CommerceDashboard key={dataReloadKey} />;
       case 'ventes':
         return <Ventes />;
       case 'achats':

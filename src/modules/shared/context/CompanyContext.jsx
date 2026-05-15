@@ -49,11 +49,11 @@ export function CompanyProvider({ children }) {
     }
   }
 
+  // NE PAS REChARGER LA PAGE - juste mettre à jour l'état
   const switchCompany = (company) => {
-    // Sauvegarder la société
     setCurrentCompany(company);
     setCompanyStorage(company);
-    // Ne pas recharger la page, juste mettre à jour l'état
+    // Déclencher un événement pour recharger les données
     window.dispatchEvent(new CustomEvent('companyChanged', { detail: company }));
   };
 
