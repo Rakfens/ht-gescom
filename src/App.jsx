@@ -290,9 +290,7 @@ function AppContent() {
       case 'inventaire':
         return <Inventaire />;
       case 'depenses':
-        if (currentCompany.slug === 'pomanay') {
-          return <Depenses />;
-        }
+        return <Depenses />;
         return <CommerceDashboard />;
       case 'rapports':
         return <Rapports />;
