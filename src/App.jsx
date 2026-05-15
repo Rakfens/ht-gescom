@@ -1,4 +1,5 @@
 // App.jsx
+import { supabase } from './supabaseClient';
 import { useState, useEffect } from 'react';
 import { ThemeProvider } from './modules/shared/context/ThemeContext';
 import { CompanyProvider, useCompany } from './modules/shared/context/CompanyContext';
@@ -67,6 +68,19 @@ function AppContent() {
 
   // Détection mobile
   useEffect(() => {
+    const testSupabase = async () => {
+    console.log('🔍 Variables d\'environnement:');
+    console.log('URL:', import.meta.env.VITE_SUPABASE_URL);
+    console.log('Key existe:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+    
+    // Test connexion Supabase
+    const { data, error } = await supabase.from('companies').select('*');
+    console.log('📊 Sociétés:', data);
+    console.log('📊 Erreur:', error);
+    };
+  
+    testSupabase();
+
     console.log('🟢 1. AppContent monté');
     console.log('🟢 2. authLoading:', authLoading);
     console.log('🟢 3. companyLoading:', companyLoading);
