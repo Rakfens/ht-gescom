@@ -291,7 +291,6 @@ function AppContent() {
         return <Inventaire />;
       case 'depenses':
         return <Depenses />;
-        return <CommerceDashboard />;
       case 'rapports':
         return <Rapports />;
       default:
