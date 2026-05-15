@@ -24,7 +24,7 @@ export const fetchRecuperations = async () => {
   }
 };
 
-// Récupérer les récupérations par date (version corrigée)
+// Récupérer les récupérations par date
 export const getRecuperationsByDate = async (date) => {
   try {
     const company = getCurrentCompany();
@@ -58,13 +58,16 @@ export const getRecuperationsByMonth = async (mois) => {
     console.log('getRecuperationsByMonth - Mois recherché:', mois);
     
     // Convertir le mois en plage de dates
-    const year = mois.split('-')[0];
-    const month = mois.split('-')[1];
+    const parts = mois.split('-');
+    const year = parts[0];
+    const month = parts[1];
     const startDate = `${year}-${month}-01`;
     
     // Calculer le dernier jour du mois
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
     const endDate = `${year}-${month}-${lastDay}`;
+    
+    console.log('getRecuperationsByMonth - Plage:', startDate, '→', endDate);
     
     const { data, error } = await supabase
       .from('recuperations')
@@ -199,8 +202,9 @@ export const getRecuperationsByLivreur = async (livreurId, mois) => {
       .eq('company_id', company.id);
     
     if (mois) {
-      const year = mois.split('-')[0];
-      const month = mois.split('-')[1];
+      const parts = mois.split('-');
+      const year = parts[0];
+      const month = parts[1];
       const startDate = `${year}-${month}-01`;
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
       const endDate = `${year}-${month}-${lastDay}`;
@@ -239,8 +243,9 @@ export const getRecuperationsByLivreurNom = async (livreurNom, mois) => {
       .eq('company_id', company.id);
     
     if (mois) {
-      const year = mois.split('-')[0];
-      const month = mois.split('-')[1];
+      const parts = mois.split('-');
+      const year = parts[0];
+      const month = parts[1];
       const startDate = `${year}-${month}-01`;
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
       const endDate = `${year}-${month}-${lastDay}`;
@@ -374,8 +379,9 @@ export const getRecuperationsStatsByMonth = async (mois) => {
     
     console.log('getRecuperationsStatsByMonth - Mois:', mois);
     
-    const year = mois.split('-')[0];
-    const month = mois.split('-')[1];
+    const parts = mois.split('-');
+    const year = parts[0];
+    const month = parts[1];
     const startDate = `${year}-${month}-01`;
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
     const endDate = `${year}-${month}-${lastDay}`;
@@ -391,7 +397,7 @@ export const getRecuperationsStatsByMonth = async (mois) => {
     
     // Grouper par livreur
     const stats = {};
-    data.forEach(recup => {
+    (data || []).forEach(recup => {
       const nom = recup.livreur_nom;
       if (!stats[nom]) {
         stats[nom] = {
