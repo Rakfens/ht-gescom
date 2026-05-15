@@ -1,4 +1,4 @@
-// vite.config.js
+// vite.config.js - VERSION OPTIMISÉE
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -13,12 +13,15 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
-    target: 'es2015',
+    target: 'es2020',
     cssCodeSplit: true,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor': ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js']
+          'react-vendor': ['react', 'react-dom'],
+          'router': ['react-router-dom'],
+          'supabase': ['@supabase/supabase-js'],
         }
       }
     }
