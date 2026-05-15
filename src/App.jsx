@@ -67,6 +67,12 @@ function AppContent() {
 
   // Détection mobile
   useEffect(() => {
+    console.log('🟢 1. AppContent monté');
+    console.log('🟢 2. authLoading:', authLoading);
+    console.log('🟢 3. companyLoading:', companyLoading);
+    console.log('🟢 4. session:', session);
+    console.log('🟢 5. companies:', companies);
+    console.log('🟢 6. currentCompany:', currentCompany);
     const checkEnv = async () => {
     console.log('🔍 Variables d\'environnement:');
     console.log('URL:', import.meta.env.VITE_SUPABASE_URL);
@@ -83,7 +89,7 @@ function AppContent() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [authLoading, companyLoading, session, companies, currentCompany]);
 
   const nav = (p) => {
     setPage(p);
