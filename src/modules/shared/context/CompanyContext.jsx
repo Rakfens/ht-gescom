@@ -16,12 +16,17 @@ export function CompanyProvider({ children }) {
   async function fetchUserCompanies() {
     setLoading(true);
     try {
-      // Récupérer l'utilisateur connecté
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log('🔍 1. fetchUserCompanies - Début');
       
-      console.log('👤 Utilisateur connecté:', user?.email);
+      // Récupérer la session
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔍 2. Session:', session?.user?.email);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('🔍 3. Utilisateur:', user?.email);
       
       if (!user) {
+        console.log('🔍 4. Aucun utilisateur connecté');
         setCompanies([]);
         setCurrentCompany(null);
         setLoading(false);
@@ -29,32 +34,43 @@ export function CompanyProvider({ children }) {
       }
 
       // Récupérer les sociétés de l'utilisateur
+      console.log('🔍 5. Requête user_companies pour user_id:', user.id);
       const { data, error } = await supabase
         .from('user_companies')
         .select('company:companies(*)')
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('🔍 6. Erreur:', error);
+        throw error;
+      }
 
+      console.log('🔍 7. Résultat user_companies:', data);
+      
       const userCompanies = data?.map(uc => uc.company) || [];
-      console.log('🏢 Sociétés trouvées:', userCompanies.length);
+      console.log('🔍 8. Sociétés trouvées:', userCompanies.length);
+      console.log('🔍 9. Détails sociétés:', userCompanies);
       
       setCompanies(userCompanies);
       
-      // Sélectionner la première société par défaut si aucune n'est stockée
       if (userCompanies.length > 0) {
         const stored = getCurrentCompany();
         if (stored && userCompanies.find(c => c.id === stored.id)) {
+          console.log('🔍 10. Société stockée trouvée:', stored.name);
           setCurrentCompany(stored);
         } else {
+          console.log('🔍 11. Première société sélectionnée:', userCompanies[0].name);
           setCurrentCompany(userCompanies[0]);
           setCompanyStorage(userCompanies[0]);
         }
+      } else {
+        console.log('🔍 12. Aucune société trouvée pour cet utilisateur');
       }
     } catch (error) {
-      console.error('Erreur chargement sociétés:', error);
+      console.error('🔍 13. Erreur catch:', error);
     } finally {
       setLoading(false);
+      console.log('🔍 14. Loading terminé');
     }
   }
 
