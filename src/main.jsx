@@ -1,21 +1,21 @@
-// main.jsx - Version robuste
+// main.jsx
+console.log('🟢 1. main.jsx chargé');
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 
+console.log('🟢 2. Imports chargés');
+
 // Désactiver les logs React en production
 if (import.meta.env.PROD) {
   console.log = () => {};
-  console.error = () => {};
 }
 
-// Rendu avec gestion des erreurs
-const rootElement = document.getElementById('root');
+console.log('🟢 3. Avant rendu React');
 
-if (rootElement) {
-  // Vider le contenu pour éviter l'erreur #418
-  rootElement.innerHTML = '';
-  
-  ReactDOM.createRoot(rootElement).render(<App />);
-}
+// Rendu SANS StrictMode
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+console.log('🟢 4. Après rendu React');

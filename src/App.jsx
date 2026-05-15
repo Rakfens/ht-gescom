@@ -1,6 +1,8 @@
 // App.jsx
+console.log('🔴 1. App.jsx chargé');
 import { supabase } from './supabaseClient';
 import { useState, useEffect } from 'react';
+console.log('🔴 2. supabase importé:', !!supabase);
 import { ThemeProvider } from './modules/shared/context/ThemeContext';
 import { CompanyProvider, useCompany } from './modules/shared/context/CompanyContext';
 import { AppProvider, useApp } from './modules/shared/context/AppContext';
@@ -32,6 +34,7 @@ import Inventaire from './modules/commerce/pages/Inventaire';
 import Rapports from './modules/commerce/pages/Rapports';
 
 function AppContent() {
+  console.log('🔴 3. AppContent rendu');
   const {
     session,
     loading: authLoading,
