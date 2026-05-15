@@ -18,13 +18,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'supabase-vendor': ['@supabase/supabase-js']
+          'vendor': ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js']
         }
       }
     }
   },
+  preview: {
+    port: 4173,
+    host: true
+  },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js']
+  },
+  esbuild: {
+    drop: ['console', 'debugger']
   }
 });
