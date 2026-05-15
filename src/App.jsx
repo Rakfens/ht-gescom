@@ -1,4 +1,4 @@
-// App.jsx
+// App.jsx - Version complète modifiée
 import { useState, useEffect } from 'react';
 import { ThemeProvider } from './modules/shared/context/ThemeContext';
 import { CompanyProvider, useCompany } from './modules/shared/context/CompanyContext';
@@ -64,7 +64,7 @@ function AppContent() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [logoUrl, setLogoUrl] = useState(null);
-  const [dataReloadKey, setDataReloadKey] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Détection mobile
   useEffect(() => {
@@ -75,13 +75,15 @@ function AppContent() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Recharger les données quand la société change
+  // Initialisation après chargement
   useEffect(() => {
-    if (currentCompany) {
-      console.log('🔄 Société changée vers:', currentCompany.name);
-      setDataReloadKey(prev => prev + 1);
+    if (!authLoading && !companyLoading && session) {
+      setIsInitialized(true);
+      console.log('✅ Application initialisée');
+      console.log('🏢 Sociétés disponibles:', companies.length);
+      console.log('🏢 Société courante:', currentCompany?.name);
     }
-  }, [currentCompany]);
+  }, [authLoading, companyLoading, session, companies, currentCompany]);
 
   const nav = (p) => {
     setPage(p);
@@ -96,14 +98,17 @@ function AppContent() {
     lieux: [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])]
   };
 
+  // Écran de chargement principal
   if (authLoading || companyLoading) {
     return <Loader message="Chargement de l'application..." />;
   }
 
+  // Page de connexion
   if (!session) {
-    return <Login onLoginSuccess={() => window.location.reload()} />;
+    return <Login />;
   }
 
+  // Aucune société trouvée
   if (companies.length === 0) {
     return (
       <div style={{ 
@@ -115,63 +120,24 @@ function AppContent() {
       }}>
         <div style={{ textAlign: 'center', padding: 20 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
-          <h2 style={{ marginBottom: 20 }}>Aucune société trouvée</h2>
-          <p style={{ color: 'var(--muted)' }}>Veuillez contacter l'administrateur</p>
+          <h2>Aucune société trouvée</h2>
+          <p style={{ color: 'var(--muted)', marginTop: 8 }}>
+            Veuillez contacter l'administrateur
+          </p>
         </div>
       </div>
     );
   }
 
-  // Si une seule société, la sélectionner automatiquement (sans rechargement)
-  if (companies.length === 1 && !currentCompany) {
-    const singleCompany = companies[0];
-    localStorage.setItem('currentCompany', JSON.stringify(singleCompany));
-    // Recharger la page une seule fois pour initialiser
+  // Sélection automatique de la société (première par défaut) - POUR NOUVEAUX APPAREILS
+  if (companies.length > 0 && !currentCompany) {
+    const defaultCompany = companies[0];
+    localStorage.setItem('currentCompany', JSON.stringify(defaultCompany));
     window.location.reload();
-    return <Loader message="Initialisation..." />;
+    return <Loader message={`Bienvenue sur ${defaultCompany.name}...`} />;
   }
 
-  // Sélecteur de société (si plusieurs sociétés et aucune sélectionnée)
-  if (companies.length > 1 && !currentCompany) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'var(--bg)'
-      }}>
-        <div style={{ textAlign: 'center', padding: 20, maxWidth: 400 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
-          <h2 style={{ marginBottom: 20 }}>Sélectionnez une société</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {companies.map(company => (
-              <button
-                key={company.id}
-                onClick={() => {
-                  localStorage.setItem('currentCompany', JSON.stringify(company));
-                  window.location.reload();
-                }}
-                style={{
-                  padding: '14px 24px',
-                  fontSize: 16,
-                  background: '#1e3a5f',
-                  border: 'none',
-                  borderRadius: 10,
-                  color: '#60a5fa',
-                  cursor: 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                {company.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Attendre que currentCompany soit chargé
   if (!currentCompany) {
     return <Loader message="Chargement de la société..." />;
   }
@@ -184,7 +150,6 @@ function AppContent() {
         case 'dashboard':
           return (
             <ServiceDashboard 
-              key={dataReloadKey}
               agents={agents} 
               livraisons={livraisons} 
               commissionGerant={500}
@@ -267,7 +232,7 @@ function AppContent() {
     // Pomanay ou Zazatiana (type: commerce)
     switch (page) {
       case 'dashboard':
-        return <CommerceDashboard key={dataReloadKey} />;
+        return <CommerceDashboard />;
       case 'ventes':
         return <Ventes />;
       case 'achats':
