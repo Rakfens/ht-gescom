@@ -16,6 +16,8 @@ export function CompanyProvider({ children }) {
   async function fetchUserCompanies() {
     setLoading(true);
     try {
+      console.log('🔍 VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL);
+      console.log('🔍 VITE_SUPABASE_ANON_KEY existe:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
       console.log('🔍 1. Début fetchUserCompanies');
       
       // Récupérer l'utilisateur connecté
