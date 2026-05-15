@@ -1,16 +1,20 @@
+// src/modules/livraison/pages/Dashboard.jsx
 import { useState, useEffect } from 'react';
+import { useCompany } from '../../shared/context/CompanyContext';
 import { formatAr, TODAY, currentMonth, monthLabel, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../shared/utils/constants';
 import { btn, tag, inpSm } from '../../shared/utils/helpers';  
 import { getRecuperationsByDate } from '../services/recuperationService'; 
 
 export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) => {
+  const { currentCompany } = useCompany(); // ← AJOUT OBLIGATOIRE
+  
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [selectedDate, setSelectedDate] = useState(TODAY());
   const [recuperationsJour, setRecuperationsJour] = useState([]);
   const [loadingRecup, setLoadingRecup] = useState(false);
 
-  const enCours = livraisons.filter(l => l.statut === 'en_cours').length;
-  const todayLivs = livraisons.filter(l => l.date === TODAY());
+  const enCours = livraisons?.filter(l => l.statut === 'en_cours').length || 0;
+  const todayLivs = livraisons?.filter(l => l.date === TODAY()) || [];
   
   const livsGerant = todayLivs.filter(l => shouldCountGerantCommission(l));
   const gerantGain = livsGerant.length * commissionGerant;
@@ -19,6 +23,15 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
     EXCLUDED_CLIENTS.includes(l.client_donneur?.toUpperCase() || '') &&
     parseFloat(l.frais || 0) > 0
   );
+
+  // Détection mobile
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Charger les récupérations de la date sélectionnée
   useEffect(() => {
@@ -53,19 +66,10 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
     return acc;
   }, {});
 
-  // Détection mobile
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 6 }}>
-        Dashboard {currentCompany?.name}
+        Dashboard {currentCompany?.name || 'HT-GesCom'}
       </h1>
       
       {/* Cartes statistiques */}
@@ -76,7 +80,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
         marginBottom: 20 
       }}>
         <div style={{ background: 'linear-gradient(135deg, var(--card), var(--bg))', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)', marginBottom: 3 }}>{livraisons.length}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)', marginBottom: 3 }}>{livraisons?.length || 0}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>Total livraisons</div>
         </div>
         <div style={{ background: 'linear-gradient(135deg, var(--card), var(--bg))', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
@@ -84,11 +88,11 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>En cours</div>
         </div>
         <div style={{ background: 'linear-gradient(135deg, var(--card), var(--bg))', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--green)', marginBottom: 3 }}>{livraisons.filter(l => l.statut === 'livre').length}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--green)', marginBottom: 3 }}>{livraisons?.filter(l => l.statut === 'livre').length || 0}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>Livrés</div>
         </div>
         <div style={{ background: 'linear-gradient(135deg, var(--card), var(--bg))', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--red)', marginBottom: 3 }}>{livraisons.filter(l => l.statut === 'retourne').length}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--red)', marginBottom: 3 }}>{livraisons?.filter(l => l.statut === 'retourne').length || 0}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>Retournés</div>
         </div>
       </div>
@@ -180,8 +184,8 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
       {isMobile ? (
         // Version mobile : cartes
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {agents.map(a => {
-            const ls = livraisons.filter(l => l.agent_id === a.id);
+          {agents?.map(a => {
+            const ls = livraisons?.filter(l => l.agent_id === a.id) || [];
             const totalFrais = ls.reduce((s, l) => s + parseFloat(l.frais || 0), 0);
             const livres = ls.filter(l => l.statut === 'livre').length;
             const retournes = ls.filter(l => l.statut === 'retourne').length;
@@ -208,7 +212,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
                     fontSize: 18,
                     color: '#fff'
                   }}>
-                    {a.nom.charAt(0)}
+                    {a.nom?.charAt(0) || '?'}
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)' }}>{a.nom}</div>
@@ -272,8 +276,8 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
               </tr>
             </thead>
             <tbody>
-              {agents.map(a => {
-                const ls = livraisons.filter(l => l.agent_id === a.id);
+              {agents?.map(a => {
+                const ls = livraisons?.filter(l => l.agent_id === a.id) || [];
                 const totalFrais = ls.reduce((s, l) => s + parseFloat(l.frais || 0), 0);
                 return (
                   <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
