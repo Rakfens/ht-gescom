@@ -1,8 +1,5 @@
 // App.jsx
-console.log('🔴 1. App.jsx chargé');
-import { supabase } from './supabaseClient';
 import { useState, useEffect } from 'react';
-console.log('🔴 2. supabase importé:', !!supabase);
 import { ThemeProvider } from './modules/shared/context/ThemeContext';
 import { CompanyProvider, useCompany } from './modules/shared/context/CompanyContext';
 import { AppProvider, useApp } from './modules/shared/context/AppContext';
@@ -23,7 +20,7 @@ import { Gerant } from './modules/livraison/pages/Gerant';
 import { Recap } from './modules/livraison/pages/Recap';
 import { Agents } from './modules/livraison/pages/Agents';
 import { Recuperation } from './modules/livraison/pages/Recuperation';
-import Depenses from './modules/commerce/pages/Depenses';  // ← AJOUTÉ
+import Depenses from './modules/commerce/pages/Depenses';
 
 // Modules Commerce (Pomanay & Zazatiana)
 import CommerceDashboard from './modules/commerce/pages/Dashboard';
@@ -34,7 +31,6 @@ import Inventaire from './modules/commerce/pages/Inventaire';
 import Rapports from './modules/commerce/pages/Rapports';
 
 function AppContent() {
-  console.log('🔴 3. AppContent rendu');
   const {
     session,
     loading: authLoading,
@@ -62,37 +58,45 @@ function AppContent() {
     error
   } = useApp();
 
-  const { currentCompany, companies, loading: companyLoading } = useCompany();
+  const { currentCompany, companies, loading: companyLoading, switchCompany } = useCompany();
 
   const [page, setPage] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [logoUrl, setLogoUrl] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Détection mobile
   useEffect(() => {
-    console.log('🟢 1. AppContent monté');
-    console.log('🟢 2. authLoading:', authLoading);
-    console.log('🟢 3. companyLoading:', companyLoading);
-    console.log('🟢 4. session:', session);
-    console.log('🟢 5. companies:', companies);
-    console.log('🟢 6. currentCompany:', currentCompany);
-    const checkEnv = async () => {
-    console.log('🔍 Variables d\'environnement:');
-    console.log('URL:', import.meta.env.VITE_SUPABASE_URL);
-    console.log('Key existe:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
-    
-    // Tester directement Supabase
-    const { data, error } = await supabase.from('companies').select('*');
-    console.log('Sociétés:', data);
-    console.log('Erreur:', error);
-    };
-    checkEnv();
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Écouter les changements de société
+  useEffect(() => {
+    const handleCompanyChange = (event) => {
+      console.log('🏢 Société changée vers:', event.detail?.name);
+      // Recharger la page pour éviter les problèmes d'état
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    };
+    
+    window.addEventListener('companyChanged', handleCompanyChange);
+    return () => window.removeEventListener('companyChanged', handleCompanyChange);
+  }, []);
+
+  // Initialisation après chargement
+  useEffect(() => {
+    if (!authLoading && !companyLoading && session) {
+      setIsInitialized(true);
+      console.log('✅ Application initialisée');
+      console.log('🏢 Sociétés disponibles:', companies.length);
+      console.log('🏢 Société courante:', currentCompany?.name);
+    }
   }, [authLoading, companyLoading, session, companies, currentCompany]);
 
   const nav = (p) => {
@@ -108,16 +112,37 @@ function AppContent() {
     lieux: [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])]
   };
 
+  // Écran de chargement
   if (authLoading || companyLoading) {
-    return <Loader />;
+    return <Loader message="Chargement de l'application..." />;
   }
 
+  // Page de connexion
   if (!session) {
-    return <Login />;
+    return <Login onLoginSuccess={() => window.location.reload()} />;
   }
 
-  // Si des sociétés existent mais aucune n'est sélectionnée - AFFICHER LE SÉLECTEUR
-  if (companies.length > 0 && !currentCompany) {
+  // Sélection des sociétés
+  if (companies.length === 0) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'var(--bg)'
+      }}>
+        <div style={{ textAlign: 'center', padding: 20 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
+          <h2 style={{ marginBottom: 20 }}>Aucune société trouvée</h2>
+          <p style={{ color: 'var(--muted)' }}>Veuillez contacter l'administrateur</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Sélecteur de société (si plusieurs sociétés)
+  if (companies.length > 1 && !currentCompany) {
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -145,14 +170,7 @@ function AppContent() {
                   borderRadius: 10,
                   color: '#60a5fa',
                   cursor: 'pointer',
-                  fontWeight: 600,
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#2d4a6e';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#1e3a5f';
+                  fontWeight: 600
                 }}
               >
                 {company.name}
@@ -164,25 +182,12 @@ function AppContent() {
     );
   }
 
-  // Si aucune société
-  if (companies.length === 0) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'var(--bg)'
-      }}>
-        <div style={{ textAlign: 'center', padding: 20 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-          <h2>Aucune société trouvée</h2>
-          <p style={{ marginTop: 8, color: 'var(--muted)' }}>
-            Veuillez contacter l'administrateur
-          </p>
-        </div>
-      </div>
-    );
+  // Si une seule société, la sélectionner automatiquement
+  if (companies.length === 1 && !currentCompany) {
+    const singleCompany = companies[0];
+    localStorage.setItem('currentCompany', JSON.stringify(singleCompany));
+    window.location.reload();
+    return <Loader message="Sélection de la société..." />;
   }
 
   // Rendu selon le type de société
@@ -265,7 +270,7 @@ function AppContent() {
               setRecuperations={() => {}}
             />
           );
-        case 'depenses':  // ← AJOUTÉ pour Aterinay Service
+        case 'depenses':
           return <Depenses />;
         default:
           return <ServiceDashboard agents={agents} livraisons={livraisons} onNavigate={nav} />;
@@ -285,7 +290,6 @@ function AppContent() {
       case 'inventaire':
         return <Inventaire />;
       case 'depenses':
-        // Les dépenses sont uniquement pour Pomanay
         if (currentCompany.slug === 'pomanay') {
           return <Depenses />;
         }

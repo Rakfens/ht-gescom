@@ -75,7 +75,7 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
         <div style={{ position: 'relative' }}>
           <img 
             src={getLogoUrl()} 
-            alt={`Logo ${currentCompany?.name || 'Aterinay'}`} 
+            alt={`Logo ${currentCompany?.name || 'HT-GesCom'}`} 
             style={{ 
               width: 40, 
               height: 40, 
@@ -119,8 +119,8 @@ export const Header = ({ logoUrl, setLogoUrl, onLogout, onMenuToggle, menuOpen }
                 borderRadius: 20,
                 color: 'var(--muted)'
               }}>
-                {currentCompany.slug === 'pomanay' ? 'POMANAY' : 
-                 currentCompany.slug === 'zazatiana' ? 'ZAZATIANA' : 'ATERINAY'}
+                {currentCompany.slug === 'pomanay' ? 'BOUTIQUE' : 
+                 currentCompany.slug === 'zazatiana' ? 'BOUTIQUE BÉBÉ' : 'SERVICE'}
               </span>
             )}
           </div>
