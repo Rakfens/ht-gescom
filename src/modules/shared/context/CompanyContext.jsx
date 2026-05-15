@@ -1,6 +1,6 @@
 // src/modules/shared/context/CompanyContext.jsx
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../../../supabaseClient';
+import { supabase, setCurrentCompany as setCompanyStorage, getCurrentCompany } from '../../../supabaseClient';
 
 const CompanyContext = createContext();
 
@@ -16,14 +16,19 @@ export function CompanyProvider({ children }) {
   async function fetchUserCompanies() {
     setLoading(true);
     try {
+      // Récupérer l'utilisateur connecté
       const { data: { user } } = await supabase.auth.getUser();
+      
+      console.log('👤 Utilisateur connecté:', user?.email);
       
       if (!user) {
         setCompanies([]);
         setCurrentCompany(null);
+        setLoading(false);
         return;
       }
 
+      // Récupérer les sociétés de l'utilisateur
       const { data, error } = await supabase
         .from('user_companies')
         .select('company:companies(*)')
@@ -32,15 +37,19 @@ export function CompanyProvider({ children }) {
       if (error) throw error;
 
       const userCompanies = data?.map(uc => uc.company) || [];
+      console.log('🏢 Sociétés trouvées:', userCompanies.length);
+      
       setCompanies(userCompanies);
       
-      // Récupérer la société stockée
-      const stored = localStorage.getItem('currentCompany');
-      if (stored && userCompanies.find(c => c.id === JSON.parse(stored).id)) {
-        setCurrentCompany(JSON.parse(stored));
-      } else if (userCompanies.length > 0) {
-        setCurrentCompany(userCompanies[0]);
-        localStorage.setItem('currentCompany', JSON.stringify(userCompanies[0]));
+      // Sélectionner la première société par défaut si aucune n'est stockée
+      if (userCompanies.length > 0) {
+        const stored = getCurrentCompany();
+        if (stored && userCompanies.find(c => c.id === stored.id)) {
+          setCurrentCompany(stored);
+        } else {
+          setCurrentCompany(userCompanies[0]);
+          setCompanyStorage(userCompanies[0]);
+        }
       }
     } catch (error) {
       console.error('Erreur chargement sociétés:', error);
@@ -51,18 +60,12 @@ export function CompanyProvider({ children }) {
 
   const switchCompany = (company) => {
     setCurrentCompany(company);
-    localStorage.setItem('currentCompany', JSON.stringify(company));
+    setCompanyStorage(company);
     window.location.reload();
   };
 
   return (
-    <CompanyContext.Provider value={{ 
-      currentCompany, 
-      companies, 
-      loading, 
-      switchCompany,
-      setCurrentCompany  // ← EXPOSER cette fonction
-    }}>
+    <CompanyContext.Provider value={{ currentCompany, companies, loading, switchCompany }}>
       {children}
     </CompanyContext.Provider>
   );
