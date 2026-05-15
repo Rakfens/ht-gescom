@@ -67,6 +67,17 @@ function AppContent() {
 
   // Détection mobile
   useEffect(() => {
+    const checkEnv = async () => {
+    console.log('🔍 Variables d\'environnement:');
+    console.log('URL:', import.meta.env.VITE_SUPABASE_URL);
+    console.log('Key existe:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+    
+    // Tester directement Supabase
+    const { data, error } = await supabase.from('companies').select('*');
+    console.log('Sociétés:', data);
+    console.log('Erreur:', error);
+    };
+    checkEnv();
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
