@@ -5,7 +5,7 @@ import { COLORS } from '../../utils/constants';
 import { btn, inp, lbl } from '../../utils/helpers';
 
 export const Login = ({ onLoginSuccess }) => {
-  const { login, companies, loading, authError } = useAuth();
+  const { login, companies = [], loading, authError } = useAuth(); // ← companies est maintenant disponible
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('');
@@ -14,7 +14,7 @@ export const Login = ({ onLoginSuccess }) => {
 
   // Récupérer le logo de la société sélectionnée
   useEffect(() => {
-    if (selectedCompany) {
+    if (selectedCompany && companies.length > 0) {
       const company = companies.find(c => c.id === selectedCompany);
       if (company?.logo_url) {
         setLogoUrl(company.logo_url);
@@ -61,7 +61,6 @@ export const Login = ({ onLoginSuccess }) => {
     <div style={{ minHeight: '100vh', background: COLORS.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: COLORS.card, border: '1px solid ' + COLORS.border2, borderRadius: 20, padding: 36, width: '100%', maxWidth: 380, textAlign: 'center' }}>
         
-        {/* Logo selon la société sélectionnée */}
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" style={{ width: 70, height: 70, objectFit: 'contain', borderRadius: 14, background: '#fff', padding: 4, marginBottom: 16 }} />
         ) : (
