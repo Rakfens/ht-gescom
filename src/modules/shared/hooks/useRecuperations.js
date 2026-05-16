@@ -1,6 +1,6 @@
-// modules/shared/hooks/useRecuperations.js
+// useRecuperations.js — avec Realtime sync
 import { useState, useEffect, useCallback } from 'react';
-import { fetchRecuperations, addRecuperation, updateRecuperation, deleteRecuperation } from '../../livraison/services/recuperationService'; 
+import { fetchRecuperations, addRecuperation, updateRecuperation, deleteRecuperation } from '../../livraison/services/recuperationService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useRecuperations = () => {
@@ -10,45 +10,35 @@ export const useRecuperations = () => {
   const { currentCompany } = useCompany();
 
   const loadRecuperations = useCallback(async () => {
-    if (!currentCompany?.id) {
-      setRecuperations([]);
-      setLoading(false);
-      return;
-    }
-    
+    if (!currentCompany?.id) { setRecuperations([]); setLoading(false); return; }
     try {
       setError(null);
       const data = await fetchRecuperations();
       setRecuperations(data);
-    } catch (error) {
-      console.error('Erreur chargement récupérations:', error);
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [currentCompany?.id]);
 
-  const handleAddRecuperation = async (recuperation) => {
-    if (!currentCompany?.id) {
-      const err = new Error('Aucune société sélectionnée');
-      setError(err.message);
-      throw err;
-    }
-    
+  useEffect(() => { loadRecuperations(); }, [loadRecuperations]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.table === 'recuperations') loadRecuperations();
+    };
+    window.addEventListener('supabase_realtime', handler);
+    return () => window.removeEventListener('supabase_realtime', handler);
+  }, [loadRecuperations]);
+
+  const handleAddRecuperation = async (rec) => {
     try {
       setError(null);
-      const newRecuperation = {
-        ...recuperation,
-        company_id: currentCompany.id
-      };
-      const data = await addRecuperation(newRecuperation);
-      setRecuperations(prev => [data, ...prev]);
-      return data;
-    } catch (error) {
-      console.error('Erreur ajout récupération:', error);
-      setError(error.message);
-      throw error;
-    }
+      const newRec = await addRecuperation(rec);
+      setRecuperations(prev => [newRec, ...prev]);
+      return newRec;
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleUpdateRecuperation = async (id, updates) => {
@@ -56,11 +46,7 @@ export const useRecuperations = () => {
       setError(null);
       await updateRecuperation(id, updates);
       setRecuperations(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
-    } catch (error) {
-      console.error('Erreur mise à jour récupération:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleDeleteRecuperation = async (id) => {
@@ -68,24 +54,14 @@ export const useRecuperations = () => {
       setError(null);
       await deleteRecuperation(id);
       setRecuperations(prev => prev.filter(r => r.id !== id));
-    } catch (error) {
-      console.error('Erreur suppression récupération:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
-  useEffect(() => {
-    loadRecuperations();
-  }, [loadRecuperations]);
-
-  return { 
-    recuperations, 
-    loading, 
-    error,
-    addRecuperation: handleAddRecuperation, 
-    updateRecuperation: handleUpdateRecuperation, 
-    deleteRecuperation: handleDeleteRecuperation, 
-    reloadRecuperations: loadRecuperations 
+  return {
+    recuperations, loading, error,
+    addRecuperation: handleAddRecuperation,
+    updateRecuperation: handleUpdateRecuperation,
+    deleteRecuperation: handleDeleteRecuperation,
+    reloadRecuperations: loadRecuperations,
   };
 };

@@ -1,6 +1,6 @@
-// modules/shared/hooks/useAvances.js
+// useAvances.js — avec Realtime sync
 import { useState, useEffect, useCallback } from 'react';
-import { fetchAvances, addAvance, annulerAvance, deleteAvance } from '../../livraison/services/avanceService'; 
+import { fetchAvances, addAvance, annulerAvance, deleteAvance } from '../../livraison/services/avanceService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useAvances = () => {
@@ -10,57 +10,43 @@ export const useAvances = () => {
   const { currentCompany } = useCompany();
 
   const loadAvances = useCallback(async () => {
-    if (!currentCompany?.id) {
-      setAvances([]);
-      setLoading(false);
-      return;
-    }
-    
+    if (!currentCompany?.id) { setAvances([]); setLoading(false); return; }
     try {
       setError(null);
       const data = await fetchAvances();
       setAvances(data);
-    } catch (error) {
-      console.error('Erreur chargement avances:', error);
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [currentCompany?.id]);
 
+  useEffect(() => { loadAvances(); }, [loadAvances]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.table === 'avances') loadAvances();
+    };
+    window.addEventListener('supabase_realtime', handler);
+    return () => window.removeEventListener('supabase_realtime', handler);
+  }, [loadAvances]);
+
   const handleAddAvance = async (avance) => {
-    if (!currentCompany?.id) {
-      const err = new Error('Aucune société sélectionnée');
-      setError(err.message);
-      throw err;
-    }
-    
     try {
       setError(null);
-      const newAvance = {
-        ...avance,
-        company_id: currentCompany.id
-      };
-      const data = await addAvance(newAvance);
-      setAvances(prev => [data, ...prev]);
-      return data;
-    } catch (error) {
-      console.error('Erreur ajout avance:', error);
-      setError(error.message);
-      throw error;
-    }
+      const newAvance = await addAvance(avance);
+      setAvances(prev => [newAvance, ...prev]);
+      return newAvance;
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleAnnulerAvance = async (id) => {
     try {
       setError(null);
       await annulerAvance(id);
-      setAvances(prev => prev.map(a => a.id === id ? { ...a, annule: true } : a));
-    } catch (error) {
-      console.error('Erreur annulation avance:', error);
-      setError(error.message);
-      throw error;
-    }
+      setAvances(prev => prev.map(a => a.id === id ? { ...a, statut: 'annule' } : a));
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleDeleteAvance = async (id) => {
@@ -68,24 +54,14 @@ export const useAvances = () => {
       setError(null);
       await deleteAvance(id);
       setAvances(prev => prev.filter(a => a.id !== id));
-    } catch (error) {
-      console.error('Erreur suppression avance:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
-  useEffect(() => {
-    loadAvances();
-  }, [loadAvances]);
-
-  return { 
-    avances, 
-    loading, 
-    error,
-    addAvance: handleAddAvance, 
-    annulerAvance: handleAnnulerAvance, 
-    deleteAvance: handleDeleteAvance, 
-    reloadAvances: loadAvances 
+  return {
+    avances, loading, error,
+    addAvance: handleAddAvance,
+    annulerAvance: handleAnnulerAvance,
+    deleteAvance: handleDeleteAvance,
+    reloadAvances: loadAvances,
   };
 };

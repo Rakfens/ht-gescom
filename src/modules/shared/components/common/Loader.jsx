@@ -1,186 +1,154 @@
-// src/modules/shared/components/common/Loader.jsx
-import { COLORS } from '../../utils/constants';
-
-export const Loader = ({ message = "Chargement en cours...", fullScreen = true, size = "medium" }) => {
-  const sizes = {
-    small: { fontSize: 32, textSize: 12, barWidth: 150 },
-    medium: { fontSize: 48, textSize: 14, barWidth: 200 },
-    large: { fontSize: 64, textSize: 16, barWidth: 250 }
-  };
-  
-  const currentSize = sizes[size] || sizes.medium;
-  
+// Loader.jsx — Design Premium v2
+export const Loader = ({ message = "Chargement...", fullScreen = true }) => {
   const containerStyle = fullScreen ? {
-    background: COLORS.bg,
+    background: 'var(--bg)',
     minHeight: '100vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: COLORS.text
   } : {
-    background: COLORS.bg,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '40px',
-    color: COLORS.text
+    padding: '48px 20px',
   };
-  
+
   return (
     <div style={containerStyle}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ 
-          fontSize: currentSize.fontSize, 
-          marginBottom: 16, 
-          animation: 'pulse 1.5s ease-in-out infinite' 
+        {/* Spinner orb */}
+        <div style={{
+          width: 64,
+          height: 64,
+          margin: '0 auto 20px',
+          position: 'relative',
         }}>
-          📦
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, rgba(79,158,255,0.2) 0%, rgba(99,102,241,0.1) 100%)',
+            border: '1.5px solid rgba(79,158,255,0.2)',
+          }} />
+          <div style={{
+            position: 'absolute',
+            inset: 4,
+            borderRadius: '50%',
+            border: '2px solid transparent',
+            borderTopColor: 'var(--accent)',
+            animation: 'spin 0.9s linear infinite',
+          }} />
+          <div style={{
+            position: 'absolute',
+            inset: 10,
+            borderRadius: '50%',
+            border: '2px solid transparent',
+            borderTopColor: 'rgba(79,158,255,0.3)',
+            animation: 'spin 1.4s linear infinite reverse',
+          }} />
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 22,
+          }}>
+            📦
+          </div>
         </div>
-        <div style={{ fontSize: currentSize.textSize, color: COLORS.muted, marginBottom: 12 }}>
+
+        <div style={{
+          fontSize: 14,
+          color: 'var(--text2)',
+          fontWeight: 500,
+          letterSpacing: '0.02em',
+        }}>
           {message}
         </div>
-        <div style={{ 
-          width: currentSize.barWidth, 
-          margin: '0 auto',
-          height: 3, 
-          background: COLORS.border,
-          borderRadius: 3,
-          overflow: 'hidden'
-        }}>
-          <div style={{ 
-            width: '30%', 
-            height: '100%', 
-            background: COLORS.blue,
-            borderRadius: 3,
-            animation: 'loading 1s ease-in-out infinite' 
+
+        {/* Dots animation */}
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 14 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              opacity: 0.4,
+              animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+            }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const ButtonLoader = ({ size = 16 }) => (
+  <span style={{
+    display: 'inline-block',
+    width: size,
+    height: size,
+    border: '2px solid rgba(255,255,255,0.25)',
+    borderTopColor: '#fff',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+    marginRight: 8,
+    verticalAlign: 'middle',
+    flexShrink: 0,
+  }} />
+);
+
+export const CardSkeleton = () => (
+  <div style={{
+    background: 'var(--card)',
+    border: '1px solid var(--border)',
+    borderRadius: 16,
+    padding: 18,
+    overflow: 'hidden',
+  }}>
+    {[40, 80, 60].map((w, i) => (
+      <div key={i} style={{
+        width: `${w}%`,
+        height: i === 1 ? 28 : 14,
+        background: 'var(--card2)',
+        borderRadius: 8,
+        marginBottom: i < 2 ? 12 : 0,
+        animation: `shimmer 1.5s infinite`,
+        backgroundImage: 'linear-gradient(90deg, var(--card) 0%, var(--card2) 50%, var(--card) 100%)',
+        backgroundSize: '200% 100%',
+      }} />
+    ))}
+  </div>
+);
+
+export const TableSkeleton = ({ rows = 4, columns = 3 }) => (
+  <div style={{
+    background: 'var(--card)',
+    borderRadius: 16,
+    border: '1px solid var(--border)',
+    overflow: 'hidden',
+  }}>
+    {Array(rows).fill(0).map((_, i) => (
+      <div key={i} style={{
+        padding: '12px 14px',
+        borderBottom: i < rows - 1 ? '1px solid var(--border)' : 'none',
+        display: 'flex',
+        gap: 12,
+      }}>
+        {Array(columns).fill(0).map((_, j) => (
+          <div key={j} style={{
+            flex: j === 0 ? 2 : 1,
+            height: 14,
+            background: 'var(--card2)',
+            borderRadius: 6,
+            backgroundImage: 'linear-gradient(90deg, var(--card) 0%, var(--card2) 50%, var(--card) 100%)',
+            backgroundSize: '200% 100%',
+            animation: `shimmer 1.5s ${j * 0.1}s infinite`,
           }} />
-        </div>
+        ))}
       </div>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { 
-            opacity: 1; 
-            transform: scale(1); 
-          }
-          50% { 
-            opacity: 0.6; 
-            transform: scale(1.05); 
-          }
-        }
-        @keyframes loading {
-          0% { 
-            transform: translateX(-100%); 
-            width: 30%; 
-          }
-          50% { 
-            width: 70%; 
-          }
-          100% { 
-            transform: translateX(100%); 
-            width: 30%; 
-          }
-        }
-      `}</style>
-    </div>
-  );
-};
-
-// Loader pour les boutons (spinner inline)
-export const ButtonLoader = ({ size = 16 }) => {
-  return (
-    <span style={{ 
-      display: 'inline-block',
-      width: size,
-      height: size,
-      border: `2px solid ${COLORS.border}`,
-      borderTopColor: COLORS.blue,
-      borderRadius: '50%',
-      animation: 'spin 0.8s linear infinite',
-      marginRight: 8,
-      verticalAlign: 'middle'
-    }}>
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </span>
-  );
-};
-
-// Loader pour les cartes (skeleton)
-export const CardSkeleton = () => {
-  return (
-    <div style={{ 
-      background: COLORS.card, 
-      border: `1px solid ${COLORS.border2}`, 
-      borderRadius: 12, 
-      padding: 20,
-      animation: 'pulse 1.5s ease-in-out infinite'
-    }}>
-      <div style={{ 
-        width: '40%', 
-        height: 20, 
-        background: COLORS.border, 
-        borderRadius: 4, 
-        marginBottom: 16 
-      }} />
-      <div style={{ 
-        width: '80%', 
-        height: 32, 
-        background: COLORS.border, 
-        borderRadius: 4, 
-        marginBottom: 12 
-      }} />
-      <div style={{ 
-        width: '60%', 
-        height: 16, 
-        background: COLORS.border, 
-        borderRadius: 4 
-      }} />
-    </div>
-  );
-};
-
-// Loader pour les tableaux
-export const TableSkeleton = ({ rows = 5, columns = 4 }) => {
-  return (
-    <div style={{ 
-      background: COLORS.card, 
-      borderRadius: 12, 
-      border: `1px solid ${COLORS.border2}`, 
-      overflow: 'hidden',
-      animation: 'pulse 1.5s ease-in-out infinite'
-    }}>
-      <div style={{ padding: 12, borderBottom: `1px solid ${COLORS.border2}` }}>
-        <div style={{ display: 'flex', gap: 16 }}>
-          {Array(columns).fill(0).map((_, i) => (
-            <div key={i} style={{ 
-              width: `${100 / columns}%`, 
-              height: 20, 
-              background: COLORS.border, 
-              borderRadius: 4 
-            }} />
-          ))}
-        </div>
-      </div>
-      {Array(rows).fill(0).map((_, i) => (
-        <div key={i} style={{ 
-          padding: 12, 
-          borderBottom: `1px solid ${COLORS.border}`, 
-          display: 'flex', 
-          gap: 16 
-        }}>
-          {Array(columns).fill(0).map((_, j) => (
-            <div key={j} style={{ 
-              width: `${100 / columns}%`, 
-              height: 16, 
-              background: COLORS.border, 
-              borderRadius: 4 
-            }} />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-};
+    ))}
+  </div>
+);

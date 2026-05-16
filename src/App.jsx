@@ -1,4 +1,4 @@
-// App.jsx - Version complète modifiée
+// App.jsx — v5 : fix logout + logo Login + multi-appareils
 import { useState, useEffect } from 'react';
 import { ThemeProvider } from './modules/shared/context/ThemeContext';
 import { CompanyProvider, useCompany } from './modules/shared/context/CompanyContext';
@@ -7,12 +7,11 @@ import { ToastContainer } from './modules/shared/components/common/Toast';
 import { Loader } from './modules/shared/components/common/Loader';
 import { Login } from './modules/shared/components/Auth/Login';
 
-// Layout
 import { Header } from './modules/shared/components/Layout/Header';
 import { Sidebar } from './modules/shared/components/Layout/Sidebar';
 import { BottomNav } from './modules/shared/components/Layout/BottomNav';
 
-// Modules Aterinay (Service)
+// Modules Aterinay (service livraison)
 import { Dashboard as ServiceDashboard } from './modules/livraison/pages/Dashboard';
 import { LivraisonForm } from './modules/livraison/components/LivraisonForm';
 import { Historique } from './modules/livraison/pages/Historique';
@@ -22,7 +21,7 @@ import { Agents } from './modules/livraison/pages/Agents';
 import { Recuperation } from './modules/livraison/pages/Recuperation';
 import Depenses from './modules/commerce/pages/Depenses';
 
-// Modules Commerce (Pomanay & Zazatiana)
+// Modules Commerce
 import CommerceDashboard from './modules/commerce/pages/Dashboard';
 import Ventes from './modules/commerce/pages/Ventes';
 import Achats from './modules/commerce/pages/Achats';
@@ -30,273 +29,154 @@ import Stock from './modules/commerce/pages/Stock';
 import Inventaire from './modules/commerce/pages/Inventaire';
 import Rapports from './modules/commerce/pages/Rapports';
 
+import { supabase } from './supabaseClient';
+
+// ─── Composant interne (accès aux Context) ───────────────────────────
 function AppContent() {
   const {
-    session,
-    loading: authLoading,
-    login,
-    logout,
-    agents,
-    livraisons,
-    avances,
-    recuperations,
-    addAgent,
-    updateAgent,
-    deleteAgent,
-    addLivraison,
-    updateLivraison,
-    deleteLivraison,
-    addAvance,
-    annulerAvance,
-    deleteAvance,
-    addRecuperation,
-    updateRecuperation,
-    deleteRecuperation,
-    toasts,
-    hideToast,
-    success,
-    error
+    session, loading: authLoading, login, logout,
+    agents, livraisons, avances, recuperations,
+    addAgent, updateAgent, deleteAgent,
+    addLivraison, updateLivraison, deleteLivraison,
+    addAvance, annulerAvance, deleteAvance,
+    addRecuperation, updateRecuperation, deleteRecuperation,
+    toasts, hideToast, success,
   } = useApp();
 
-  const { currentCompany, companies, loading: companyLoading, switchCompany } = useCompany();
+  const { currentCompany, companies, loading: companyLoading } = useCompany();
 
   const [page, setPage] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [logoUrl, setLogoUrl] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Détection mobile
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Initialisation après chargement
-  useEffect(() => {
-    if (!authLoading && !companyLoading && session) {
-      setIsInitialized(true);
-      console.log('✅ Application initialisée');
-      console.log('🏢 Sociétés disponibles:', companies.length);
-      console.log('🏢 Société courante:', currentCompany?.name);
-    }
-  }, [authLoading, companyLoading, session, companies, currentCompany]);
-
-  const nav = (p) => {
-    setPage(p);
-    setMenuOpen(false);
-  };
-
+  const nav = (p) => { setPage(p); setMenuOpen(false); };
   const enCours = livraisons?.filter(l => l.statut === 'en_cours').length || 0;
-
   const suggestions = {
-    clients: [...new Set(livraisons?.map(l => l.client_donneur).filter(Boolean) || [])],
+    clients:   [...new Set(livraisons?.map(l => l.client_donneur).filter(Boolean) || [])],
     colisList: [...new Set(livraisons?.map(l => l.colis).filter(Boolean) || [])],
-    lieux: [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])]
+    lieux:     [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])],
   };
 
-  // Écran de chargement principal
-  if (authLoading || companyLoading) {
-    return <Loader message="Chargement de l'application..." />;
+  // ── Chargement auth seulement (pas company) ──────────────────────
+  // On n'attend PAS companyLoading pour montrer le Login
+  if (authLoading) {
+    return <Loader message="Démarrage..." />;
   }
 
-  // Page de connexion
+  // ── Pas de session → Login ────────────────────────────────────────
   if (!session) {
     return <Login />;
   }
 
-  // Aucune société trouvée
+  // ── Connecté mais society en cours de chargement ─────────────────
+  if (companyLoading) {
+    return <Loader message="Chargement des données..." />;
+  }
+
+  // ── Aucune société assignée ───────────────────────────────────────
   if (companies.length === 0) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'var(--bg)'
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--bg)',
+        flexDirection: 'column', gap: 14, padding: 24,
       }}>
-        <div style={{ textAlign: 'center', padding: 20 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🏢</div>
-          <h2>Aucune société trouvée</h2>
-          <p style={{ color: 'var(--muted)', marginTop: 8 }}>
-            Veuillez contacter l'administrateur
-          </p>
+        <div style={{ fontSize: 48 }}>🏢</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', textAlign: 'center' }}>
+          Aucune société trouvée
         </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
+          Contactez votre administrateur pour être assigné à une société.
+        </div>
+        <button onClick={logout} style={{
+          marginTop: 8, padding: '11px 22px',
+          background: 'var(--red-dim)', color: 'var(--red)',
+          border: '1px solid rgba(248,113,113,0.25)',
+          borderRadius: 12, cursor: 'pointer', fontWeight: 600, fontSize: 14,
+        }}>
+          Déconnexion
+        </button>
       </div>
     );
   }
 
-  // Sélection automatique de la société (première par défaut) - POUR NOUVEAUX APPAREILS
-  if (companies.length > 0 && !currentCompany) {
-    const defaultCompany = companies[0];
-    localStorage.setItem('currentCompany', JSON.stringify(defaultCompany));
-    window.location.reload();
-    return <Loader message={`Bienvenue sur ${defaultCompany.name}...`} />;
-  }
-
-  // Attendre que currentCompany soit chargé
+  // ── Société chargée mais pas encore active ────────────────────────
   if (!currentCompany) {
-    return <Loader message="Chargement de la société..." />;
+    return <Loader message="Sélection de la société..." />;
   }
 
-  // Rendu selon le type de société
+  // ── Rendu des pages ───────────────────────────────────────────────
   const renderContent = () => {
-    // Aterinay Service (type: service)
     if (currentCompany.type === 'service') {
       switch (page) {
-        case 'dashboard':
-          return (
-            <ServiceDashboard 
-              agents={agents} 
-              livraisons={livraisons} 
-              commissionGerant={500}
-              onNavigate={nav} 
-            />
-          );
-        case 'livraison':
-          return (
-            <LivraisonForm 
-              agents={agents} 
-              onAddLivraison={addLivraison} 
-              showToast={success} 
-              suggestions={suggestions} 
-            />
-          );
-        case 'historique':
-          return (
-            <Historique 
-              livraisons={livraisons} 
-              agents={agents} 
-              onUpdateLivraison={updateLivraison} 
-              onDeleteLivraison={deleteLivraison} 
-              showToast={success}
-              logoUrl={logoUrl}
-            />
-          );
-        case 'gerant':
-          return (
-            <Gerant 
-              livraisons={livraisons} 
-              commissionGerant={500}
-              onUpdateCommission={async (val) => {
-                success('Commission mise à jour');
-              }} 
-              showToast={success} 
-            />
-          );
-        case 'recap':
-          return (
-            <Recap 
-              livraisons={livraisons} 
-              avances={avances} 
-              agents={agents} 
-              commissionGerant={500}
-              onAddAvance={addAvance}
-              onAnnulerAvance={annulerAvance}
-              onDeleteAvance={deleteAvance}
-              showToast={success}
-            />
-          );
-        case 'agents':
-          return (
-            <Agents 
-              agents={agents} 
-              onAddAgent={addAgent} 
-              onUpdateAgent={updateAgent} 
-              onDeleteAgent={deleteAgent} 
-              showToast={success} 
-            />
-          );
-        case 'recuperation':
-          return (
-            <Recuperation 
-              agents={agents} 
-              showToast={success}
-              onAddRecuperation={addRecuperation}
-              onUpdateRecuperation={updateRecuperation}
-              onDeleteRecuperation={deleteRecuperation}
-              recuperations={recuperations}
-              setRecuperations={() => {}}
-            />
-          );
-        case 'depenses':
-          return <Depenses />;
-        default:
-          return <ServiceDashboard agents={agents} livraisons={livraisons} onNavigate={nav} />;
+        case 'dashboard':    return <ServiceDashboard agents={agents} livraisons={livraisons} commissionGerant={500} onNavigate={nav} />;
+        case 'livraison':    return <LivraisonForm agents={agents} onAddLivraison={addLivraison} showToast={success} suggestions={suggestions} />;
+        case 'historique':   return <Historique livraisons={livraisons} agents={agents} onUpdateLivraison={updateLivraison} onDeleteLivraison={deleteLivraison} showToast={success} logoUrl={logoUrl} />;
+        case 'gerant':       return <Gerant livraisons={livraisons} commissionGerant={500} onUpdateCommission={async () => success('Commission mise à jour')} showToast={success} />;
+        case 'recap':        return <Recap livraisons={livraisons} avances={avances} agents={agents} commissionGerant={500} onAddAvance={addAvance} onAnnulerAvance={annulerAvance} onDeleteAvance={deleteAvance} showToast={success} />;
+        case 'agents':       return <Agents agents={agents} onAddAgent={addAgent} onUpdateAgent={updateAgent} onDeleteAgent={deleteAgent} showToast={success} />;
+        case 'recuperation': return <Recuperation agents={agents} showToast={success} onAddRecuperation={addRecuperation} onUpdateRecuperation={updateRecuperation} onDeleteRecuperation={deleteRecuperation} recuperations={recuperations} setRecuperations={() => {}} />;
+        case 'depenses':     return <Depenses />;
+        default:             return <ServiceDashboard agents={agents} livraisons={livraisons} onNavigate={nav} />;
       }
     }
-
-    // Pomanay ou Zazatiana (type: commerce)
     switch (page) {
-      case 'dashboard':
-        return <CommerceDashboard />;
-      case 'ventes':
-        return <Ventes />;
-      case 'achats':
-        return <Achats />;
-      case 'stock':
-        return <Stock />;
-      case 'inventaire':
-        return <Inventaire />;
-      case 'depenses':
-        return <Depenses />;
-      case 'rapports':
-        return <Rapports />;
-      default:
-        return <CommerceDashboard />;
+      case 'dashboard':  return <CommerceDashboard />;
+      case 'ventes':     return <Ventes />;
+      case 'achats':     return <Achats />;
+      case 'stock':      return <Stock />;
+      case 'inventaire': return <Inventaire />;
+      case 'depenses':   return <Depenses />;
+      case 'rapports':   return <Rapports />;
+      default:           return <CommerceDashboard />;
     }
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'var(--bg)', 
-      fontFamily: "'Segoe UI', system-ui, sans-serif", 
-      color: 'var(--text)'
-    }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--font)', color: 'var(--text)' }}>
       <ToastContainer toasts={toasts} onClose={hideToast} />
-      
-      <Header 
-        logoUrl={logoUrl} 
-        setLogoUrl={setLogoUrl} 
-        onLogout={logout} 
-        onMenuToggle={() => setMenuOpen(!menuOpen)} 
-        menuOpen={menuOpen} 
+
+      <Header
+        logoUrl={logoUrl}
+        setLogoUrl={setLogoUrl}
+        onLogout={logout}
+        onMenuToggle={() => setMenuOpen(!menuOpen)}
+        menuOpen={menuOpen}
       />
-      
+
       {menuOpen && !isMobile && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 57, 
-          left: 0, 
-          right: 0, 
-          background: 'var(--card)', 
-          borderBottom: '1px solid var(--border)', 
-          zIndex: 99 
-        }}>
+        <div style={{ position: 'fixed', top: 'var(--header-h)', left: 0, right: 0, background: 'var(--card)', borderBottom: '1px solid var(--border)', zIndex: 99 }}>
           <Sidebar page={page} onNavigate={nav} enCours={enCours} />
         </div>
       )}
 
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 57px)' }}>
+      <div style={{ display: 'flex', minHeight: `calc(100vh - var(--header-h))` }}>
         {!isMobile && <Sidebar page={page} onNavigate={nav} enCours={enCours} />}
-        
-        <main style={{ flex: 1, padding: '16px', overflowY: 'auto', paddingBottom: 90 }}>
+        <main
+          className={isMobile ? 'mobile-main' : ''}
+          style={!isMobile ? { flex: 1, padding: 16, overflowY: 'auto', paddingBottom: 32 } : {}}
+        >
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             {renderContent()}
           </div>
         </main>
       </div>
 
-      {isMobile && <BottomNav page={page} onNavigate={nav} enCours={enCours} currentCompany={currentCompany} />}
+      {isMobile && (
+        <BottomNav page={page} onNavigate={nav} enCours={enCours} currentCompany={currentCompany} />
+      )}
     </div>
   );
 }
 
-// Composant principal avec tous les providers
+// ─── App racine ───────────────────────────────────────────────────────
 export default function App() {
   return (
     <ThemeProvider>

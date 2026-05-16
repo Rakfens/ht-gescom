@@ -1,4 +1,4 @@
-// modules/shared/hooks/useLivraisons.js
+// useLivraisons.js — avec Realtime sync
 import { useState, useEffect, useCallback } from 'react';
 import { fetchLivraisons, addLivraison, updateLivraison, deleteLivraison } from '../../livraison/services/livraisonService';
 import { useCompany } from '../context/CompanyContext';
@@ -10,31 +10,32 @@ export const useLivraisons = () => {
   const { currentCompany } = useCompany();
 
   const loadLivraisons = useCallback(async () => {
-    if (!currentCompany?.id) {
-      setLivraisons([]);
-      setLoading(false);
-      return;
-    }
-    
+    if (!currentCompany?.id) { setLivraisons([]); setLoading(false); return; }
     try {
       setError(null);
       const data = await fetchLivraisons();
       setLivraisons(data);
-    } catch (error) {
-      console.error('Erreur chargement livraisons:', error);
-      setError(error.message);
+    } catch (err) {
+      console.error('useLivraisons:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [currentCompany?.id]);
 
+  useEffect(() => { loadLivraisons(); }, [loadLivraisons]);
+
+  // 🔄 Realtime
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.table === 'livraisons') loadLivraisons();
+    };
+    window.addEventListener('supabase_realtime', handler);
+    return () => window.removeEventListener('supabase_realtime', handler);
+  }, [loadLivraisons]);
+
   const handleAddLivraison = async (livraison) => {
-    if (!currentCompany?.id) {
-      const err = new Error('Aucune société sélectionnée');
-      setError(err.message);
-      throw err;
-    }
-    
+    if (!currentCompany?.id) throw new Error('Aucune société sélectionnée');
     try {
       setError(null);
       const montant = livraison.paiement === 'client' ? 0 : parseFloat(livraison.montant) || 0;
@@ -46,21 +47,17 @@ export const useLivraisons = () => {
         destinataire_lieu: livraison.destinataire_lieu || livraison.lieu || '',
         agent_id: parseInt(livraison.agentId),
         agent_nom: livraison.agentNom || livraison.agent_nom || '—',
-        montant: montant,
+        montant,
         frais: parseFloat(livraison.frais) || 0,
         paiement: livraison.paiement,
         date: livraison.date,
         statut: livraison.statut || 'en_cours',
-        company_id: currentCompany.id
+        company_id: currentCompany.id,
       };
       const data = await addLivraison(newLiv);
       setLivraisons(prev => [data, ...prev]);
       return data;
-    } catch (error) {
-      console.error('Erreur ajout livraison:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleUpdateLivraison = async (id, updates) => {
@@ -68,11 +65,7 @@ export const useLivraisons = () => {
       setError(null);
       await updateLivraison(id, updates);
       setLivraisons(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
-    } catch (error) {
-      console.error('Erreur mise à jour livraison:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleDeleteLivraison = async (id) => {
@@ -80,24 +73,14 @@ export const useLivraisons = () => {
       setError(null);
       await deleteLivraison(id);
       setLivraisons(prev => prev.filter(l => l.id !== id));
-    } catch (error) {
-      console.error('Erreur suppression livraison:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
-  useEffect(() => {
-    loadLivraisons();
-  }, [loadLivraisons]);
-
   return {
-    livraisons,
-    loading,
-    error,
+    livraisons, loading, error,
     addLivraison: handleAddLivraison,
     updateLivraison: handleUpdateLivraison,
     deleteLivraison: handleDeleteLivraison,
-    reloadLivraisons: loadLivraisons
+    reloadLivraisons: loadLivraisons,
   };
 };

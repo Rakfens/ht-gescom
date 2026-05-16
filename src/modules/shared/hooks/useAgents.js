@@ -1,4 +1,4 @@
-// modules/shared/hooks/useAgents.js (version cohérente)
+// useAgents.js — avec Realtime sync
 import { useState, useEffect, useCallback } from 'react';
 import { fetchAgents, addAgent, updateAgent, deleteAgent } from '../../livraison/services/agentService';
 import { useCompany } from '../context/CompanyContext';
@@ -10,23 +10,29 @@ export const useAgents = () => {
   const { currentCompany } = useCompany();
 
   const loadAgents = useCallback(async () => {
-    if (!currentCompany?.id) {
-      setAgents([]);
-      setLoading(false);
-      return;
-    }
-    
+    if (!currentCompany?.id) { setAgents([]); setLoading(false); return; }
     try {
       setError(null);
       const data = await fetchAgents();
       setAgents(data);
-    } catch (error) {
-      console.error('Erreur chargement agents:', error);
-      setError(error.message);
+    } catch (err) {
+      console.error('useAgents:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [currentCompany?.id]);
+
+  useEffect(() => { loadAgents(); }, [loadAgents]);
+
+  // 🔄 Realtime : recharger si changement sur 'agents'
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.table === 'agents') loadAgents();
+    };
+    window.addEventListener('supabase_realtime', handler);
+    return () => window.removeEventListener('supabase_realtime', handler);
+  }, [loadAgents]);
 
   const handleAddAgent = async (nom, salaire) => {
     try {
@@ -34,11 +40,7 @@ export const useAgents = () => {
       const newAgent = await addAgent(nom, salaire);
       setAgents(prev => [...prev, newAgent]);
       return newAgent;
-    } catch (error) {
-      console.error('Erreur ajout agent:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleUpdateAgent = async (id, updates) => {
@@ -46,11 +48,7 @@ export const useAgents = () => {
       setError(null);
       await updateAgent(id, updates);
       setAgents(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-    } catch (error) {
-      console.error('Erreur modification agent:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
   const handleDeleteAgent = async (id) => {
@@ -58,24 +56,14 @@ export const useAgents = () => {
       setError(null);
       await deleteAgent(id);
       setAgents(prev => prev.filter(a => a.id !== id));
-    } catch (error) {
-      console.error('Erreur suppression agent:', error);
-      setError(error.message);
-      throw error;
-    }
+    } catch (err) { setError(err.message); throw err; }
   };
 
-  useEffect(() => {
-    loadAgents();
-  }, [loadAgents]);
-
-  return { 
-    agents, 
-    loading, 
-    error,
-    addAgent: handleAddAgent, 
-    updateAgent: handleUpdateAgent, 
-    deleteAgent: handleDeleteAgent, 
-    reloadAgents: loadAgents 
+  return {
+    agents, loading, error,
+    addAgent: handleAddAgent,
+    updateAgent: handleUpdateAgent,
+    deleteAgent: handleDeleteAgent,
+    reloadAgents: loadAgents,
   };
 };
