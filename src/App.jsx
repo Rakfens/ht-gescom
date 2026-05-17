@@ -51,6 +51,10 @@ function AppContent() {
   const [logoUrl, setLogoUrl] = useState(null);
 
   useEffect(() => {
+    // Annuler le watchdog dès que l'app est montée
+    if (window.__cancelBootWatchdog) {
+    window.__cancelBootWatchdog();
+    }
     const onResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
