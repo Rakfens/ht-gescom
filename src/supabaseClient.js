@@ -1,31 +1,44 @@
-// supabaseClient.js — v4 : store mémoire pour company_id (fix multi-appareils)
+// supabaseClient.js — v5 : fix Cloudflare __cf_bm + WebSocket bloqué
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://amdxzcgwmoodyxkasrqx.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtZHh6Y2d3bW9vZHl4a2FzcnF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNjQyNzksImV4cCI6MjA5Mzk0MDI3OX0.80NMxCPo88lUyKFazfGyJCgU-DiYoXRqhxmEGxihvC0';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  realtime: { params: { eventsPerSecond: 10 } },
+  // ── CORRIGÉ : fix cookie __cf_bm Cloudflare + WebSocket bloqué ──
+  realtime: {
+    params: { eventsPerSecond: 10 },
+    transport: typeof WebSocket !== 'undefined'
+      ? WebSocket          // WebSocket natif si disponible
+      : undefined,
+    timeout: 30000,        // 30s timeout (défaut 10s trop court sur réseau Madagascar)
+    heartbeatIntervalMs: 15000,   // ping toutes les 15s pour garder la connexion
+    reconnectAfterMs: (tries) => {  // backoff exponentiel : 1s, 2s, 4s, 8s, max 30s
+      return Math.min(1000 * Math.pow(2, tries), 30000);
+    },
+  },
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'ht_gescom_auth',
   },
+  // ── AJOUT : timeout global sur les requêtes fetch ────────────────
+  global: {
+    fetch: (url, options = {}) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000); // 20s max
+      return fetch(url, { ...options, signal: controller.signal })
+        .finally(() => clearTimeout(timer));
+    },
+  },
 });
 
 // ══════════════════════════════════════════════════════════════════
 // STORE MÉMOIRE — source de vérité pour la société active
-// Mis à jour par CompanyContext, lu par tous les services.
-// NE PAS lire depuis localStorage directement dans les services.
 // ══════════════════════════════════════════════════════════════════
-
 let _currentCompany = null;
 
-/**
- * Appelé par CompanyContext quand la société change.
- * Aussi sauvegardé en localStorage pour restauration au prochain démarrage.
- */
 export const setCurrentCompany = (company) => {
   _currentCompany = company;
   try {
@@ -34,23 +47,14 @@ export const setCurrentCompany = (company) => {
   } catch (_) {}
 };
 
-/**
- * Utilisé par les services pour obtenir la société active.
- * Retourne le store mémoire (mis à jour par React Context),
- * puis fallback localStorage pour le tout premier chargement.
- */
 export const getCurrentCompany = () => {
   if (_currentCompany) return _currentCompany;
-  // Fallback uniquement au premier démarrage avant que Context s'initialise
   try {
     const s = localStorage.getItem('ht_gescom_company');
     return s ? JSON.parse(s) : null;
   } catch (_) { return null; }
 };
 
-/**
- * Réinitialiser le store (déconnexion)
- */
 export const clearCurrentCompany = () => {
   _currentCompany = null;
   try { localStorage.removeItem('ht_gescom_company'); } catch (_) {}
@@ -59,7 +63,6 @@ export const clearCurrentCompany = () => {
 // ══════════════════════════════════════════════════════════════════
 // FONCTIONS UTILITAIRES
 // ══════════════════════════════════════════════════════════════════
-
 export const insertWithCompany = async (table, data, companyId) => {
   if (!companyId) throw new Error('Company ID requis pour l\'insertion');
   const { data: result, error } = await supabase
