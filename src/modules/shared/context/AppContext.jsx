@@ -1,5 +1,5 @@
-// AppContext.jsx - VERSION OPTIMISÉE
-import { createContext, useContext, useMemo, useEffect } from 'react';
+// AppContext.jsx - VERSION CORRIGÉE : loadings séparés
+import { createContext, useContext, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAgents } from '../hooks/useAgents';
 import { useLivraisons } from '../hooks/useLivraisons';
@@ -14,17 +14,21 @@ export const AppProvider = ({ children }) => {
   const { session, loading: authLoading, login, logout } = useAuth();
   const { currentCompany, companies, loading: companyLoading, switchCompany } = useCompany();
   const { toasts, showToast, hideToast, clearAll, success, error, warn, info } = useToast();
-
   const { agents, loading: agentsLoading, addAgent, updateAgent, deleteAgent, reloadAgents } = useAgents();
   const { livraisons, loading: livraisonsLoading, addLivraison, updateLivraison, deleteLivraison, reloadLivraisons } = useLivraisons();
   const { avances, loading: avancesLoading, addAvance, annulerAvance, deleteAvance, reloadAvances } = useAvances();
   const { recuperations, loading: recuperationsLoading, addRecuperation, updateRecuperation, deleteRecuperation, reloadRecuperations } = useRecuperations();
 
-  const loading = authLoading || companyLoading || agentsLoading || livraisonsLoading || avancesLoading || recuperationsLoading;
+  // ← CORRIGÉ : 3 loadings distincts au lieu d'un seul fusionné
+  const loading     = authLoading;                          // auth seulement → écran Démarrage
+  const compLoading = companyLoading;                       // société → écran "Chargement données"
+  const dataLoading = agentsLoading || livraisonsLoading    // données métier → spinner discret
+                    || avancesLoading || recuperationsLoading;
 
   const value = useMemo(() => ({
     session, loading, login, logout,
-    currentCompany, companies, switchCompany,
+    currentCompany, companies, compLoading, switchCompany,
+    dataLoading,
     agents, addAgent, updateAgent, deleteAgent, reloadAgents,
     livraisons, addLivraison, updateLivraison, deleteLivraison, reloadLivraisons,
     avances, addAvance, annulerAvance, deleteAvance, reloadAvances,
@@ -32,7 +36,8 @@ export const AppProvider = ({ children }) => {
     toasts, showToast, hideToast, clearAll, success, error, warn, info,
   }), [
     session, loading, login, logout,
-    currentCompany, companies, switchCompany,
+    currentCompany, companies, compLoading, switchCompany,
+    dataLoading,
     agents, addAgent, updateAgent, deleteAgent, reloadAgents,
     livraisons, addLivraison, updateLivraison, deleteLivraison, reloadLivraisons,
     avances, addAvance, annulerAvance, deleteAvance, reloadAvances,

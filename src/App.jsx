@@ -1,4 +1,4 @@
-// App.jsx — v5 : fix logout + logo Login + multi-appareils
+// App.jsx — v6 : fix blocage démarrage + loadings séparés
 import { useState, useEffect } from 'react';
 import { ThemeProvider } from './modules/shared/context/ThemeContext';
 import { CompanyProvider, useCompany } from './modules/shared/context/CompanyContext';
@@ -29,12 +29,12 @@ import Stock from './modules/commerce/pages/Stock';
 import Inventaire from './modules/commerce/pages/Inventaire';
 import Rapports from './modules/commerce/pages/Rapports';
 
-import { supabase } from './supabaseClient';
-
-// ─── Composant interne (accès aux Context) ───────────────────────────
 function AppContent() {
   const {
-    session, loading: authLoading, login, logout,
+    session,
+    loading,        // auth seulement
+    compLoading,    // société seulement
+    login, logout,
     agents, livraisons, avances, recuperations,
     addAgent, updateAgent, deleteAgent,
     addLivraison, updateLivraison, deleteLivraison,
@@ -43,24 +43,23 @@ function AppContent() {
     toasts, hideToast, success,
   } = useApp();
 
-  const { currentCompany, companies, loading: companyLoading } = useCompany();
+  const { currentCompany, companies } = useCompany();
 
-  const [page, setPage] = useState('dashboard');
+  const [page, setPage]       = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoUrl, setLogoUrl]   = useState(null);
 
   useEffect(() => {
-    // Annuler le watchdog dès que l'app est montée
-    if (window.__cancelBootWatchdog) {
-    window.__cancelBootWatchdog();
-    }
+    // Annuler le watchdog de démarrage dès que React est monté
+    if (window.__cancelBootWatchdog) window.__cancelBootWatchdog();
     const onResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const nav = (p) => { setPage(p); setMenuOpen(false); };
+
   const enCours = livraisons?.filter(l => l.statut === 'en_cours').length || 0;
   const suggestions = {
     clients:   [...new Set(livraisons?.map(l => l.client_donneur).filter(Boolean) || [])],
@@ -68,23 +67,24 @@ function AppContent() {
     lieux:     [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])],
   };
 
-  // ── Chargement auth seulement (pas company) ──────────────────────
-  // On n'attend PAS companyLoading pour montrer le Login
-  if (authLoading) {
+  // ── 1. Auth en cours → écran démarrage ───────────────────────────
+  // CORRIGÉ : seulement authLoading, pas les données métier
+  if (loading) {
     return <Loader message="Démarrage..." />;
   }
 
-  // ── Pas de session → Login ────────────────────────────────────────
+  // ── 2. Pas de session → Login ─────────────────────────────────────
   if (!session) {
     return <Login />;
   }
 
-  // ── Connecté mais society en cours de chargement ─────────────────
-  if (companyLoading) {
+  // ── 3. Société en cours de chargement ─────────────────────────────
+  // CORRIGÉ : compLoading séparé, ne bloque plus si données métier lentes
+  if (compLoading) {
     return <Loader message="Chargement des données..." />;
   }
 
-  // ── Aucune société assignée ───────────────────────────────────────
+  // ── 4. Aucune société assignée ────────────────────────────────────
   if (companies.length === 0) {
     return (
       <div style={{
@@ -111,12 +111,12 @@ function AppContent() {
     );
   }
 
-  // ── Société chargée mais pas encore active ────────────────────────
+  // ── 5. Société non encore active ──────────────────────────────────
   if (!currentCompany) {
     return <Loader message="Sélection de la société..." />;
   }
 
-  // ── Rendu des pages ───────────────────────────────────────────────
+  // ── 6. Rendu des pages ────────────────────────────────────────────
   const renderContent = () => {
     if (currentCompany.type === 'service') {
       switch (page) {
@@ -156,7 +156,10 @@ function AppContent() {
       />
 
       {menuOpen && !isMobile && (
-        <div style={{ position: 'fixed', top: 'var(--header-h)', left: 0, right: 0, background: 'var(--card)', borderBottom: '1px solid var(--border)', zIndex: 99 }}>
+        <div style={{
+          position: 'fixed', top: 'var(--header-h)', left: 0, right: 0,
+          background: 'var(--card)', borderBottom: '1px solid var(--border)', zIndex: 99,
+        }}>
           <Sidebar page={page} onNavigate={nav} enCours={enCours} />
         </div>
       )}

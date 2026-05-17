@@ -1,30 +1,44 @@
-// CompanyContext.jsx — v4 : source de vérité unique, fix logout + sync multi-appareils
+// CompanyContext.jsx — v5 : fix blocage démarrage + timeout sécurité
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { supabase, setCurrentCompany, clearCurrentCompany } from '../../../supabaseClient';
 
 const CompanyContext = createContext();
 
-// Re-export pour compatibilité
 export { setCurrentCompany };
 export const getCurrentCompany = () => {
-  try { const s = localStorage.getItem('ht_gescom_company'); return s ? JSON.parse(s) : null; }
-  catch (_) { return null; }
+  try {
+    const s = localStorage.getItem('ht_gescom_company');
+    return s ? JSON.parse(s) : null;
+  } catch (_) { return null; }
 };
 
 export function CompanyProvider({ children }) {
   const [currentCompany, setCurrentCompanyState] = useState(null);
-  const [companies, setCompanies] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [companies, setCompanies]   = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [initialized, setInitialized] = useState(false);
   const realtimeChannels = useRef([]);
-  const isMounted = useRef(true);
+  const isMounted        = useRef(true);
+  const fetchInProgress  = useRef(false); // ← empêche les doubles appels
 
-  // ─── Charger les sociétés ──────────────────────────────────────────
+  // ─── Reset état ───────────────────────────────────────────────────
+  const _resetState = () => {
+    clearCurrentCompany();
+    if (!isMounted.current) return;
+    setCompanies([]);
+    setCurrentCompanyState(null);
+    setLoading(false);
+    setInitialized(true);
+    realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
+    realtimeChannels.current = [];
+  };
+
+  // ─── Charger les sociétés ─────────────────────────────────────────
   const fetchUserCompanies = async (userId) => {
-    if (!userId) {
-      _resetState();
-      return [];
-    }
+    if (!userId) { _resetState(); return []; }
+    if (fetchInProgress.current) return []; // ← évite double appel
+    fetchInProgress.current = true;
+
     try {
       const { data, error } = await supabase
         .from('user_companies')
@@ -34,11 +48,10 @@ export function CompanyProvider({ children }) {
       if (error) throw error;
 
       const list = data?.map(uc => uc.company).filter(Boolean) || [];
-
       if (!isMounted.current) return list;
+
       setCompanies(list);
 
-      // Choisir la société active
       let active = null;
       try {
         const saved = JSON.parse(localStorage.getItem('ht_gescom_company') || 'null');
@@ -47,46 +60,36 @@ export function CompanyProvider({ children }) {
         active = list[0] || null;
       }
 
-      // Mettre à jour le store mémoire ET le state React
       setCurrentCompany(active);
       setCurrentCompanyState(active);
-
+      if (active?.id) setupRealtime(active.id);
       return list;
+
     } catch (err) {
       console.error('fetchUserCompanies:', err);
-      if (isMounted.current) { setLoading(false); setInitialized(true); }
       return [];
     } finally {
-      if (isMounted.current) { setLoading(false); setInitialized(true); }
+      fetchInProgress.current = false;
+      if (isMounted.current) {
+        setLoading(false);
+        setInitialized(true);
+      }
     }
   };
 
-  const _resetState = () => {
-    clearCurrentCompany();
-    if (!isMounted.current) return;
-    setCompanies([]);
-    setCurrentCompanyState(null);
-    setLoading(false);
-    setInitialized(true);
-    // Nettoyer Realtime
-    realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
-    realtimeChannels.current = [];
-  };
-
-  // ─── Realtime ──────────────────────────────────────────────────────
+  // ─── Realtime ─────────────────────────────────────────────────────
   const setupRealtime = (companyId) => {
     realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
     realtimeChannels.current = [];
     if (!companyId) return;
 
-    const tables = ['livraisons', 'agents', 'avances', 'recuperations', 'ventes', 'achats', 'produits', 'mouvements_stock'];
+    const tables = ['livraisons', 'agents', 'avances', 'recuperations',
+                    'ventes', 'achats', 'produits', 'mouvements_stock'];
     tables.forEach(table => {
       const ch = supabase
         .channel(`realtime_${table}_${companyId}`)
         .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table,
+          event: '*', schema: 'public', table,
           filter: `company_id=eq.${companyId}`,
         }, (payload) => {
           window.dispatchEvent(new CustomEvent('supabase_realtime', {
@@ -98,52 +101,48 @@ export function CompanyProvider({ children }) {
     });
   };
 
-  // ─── Auth listener ─────────────────────────────────────────────────
+  // ─── Init au montage ──────────────────────────────────────────────
   useEffect(() => {
     isMounted.current = true;
 
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!isMounted.current) return;
-      const list = await fetchUserCompanies(session?.user?.id || null);
-      if (isMounted.current && list.length > 0) {
-        const saved = JSON.parse(localStorage.getItem('ht_gescom_company') || 'null');
-        const active = (saved && list.find(c => c.id === saved.id)) || list[0];
-        setupRealtime(active?.id);
+    // ← NOUVEAU : timeout de sécurité 10 secondes
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted.current && loading) {
+        console.warn('[CompanyContext] Timeout démarrage — forçage sortie loading');
+        setLoading(false);
+        setInitialized(true);
       }
-    };
+    }, 10000);
 
-    init();
-
+    // ← NOUVEAU : on écoute onAuthStateChange UNIQUEMENT (plus de getSession séparé)
+    // onAuthStateChange déclenche INITIAL_SESSION au premier appel — c'est notre init
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted.current) return;
 
       if (event === 'SIGNED_OUT' || !session) {
+        clearTimeout(safetyTimeout);
         _resetState();
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        clearTimeout(safetyTimeout);
         if (isMounted.current) setLoading(true);
-        const list = await fetchUserCompanies(session.user.id);
-        if (isMounted.current && list.length > 0) {
-          const saved = JSON.parse(localStorage.getItem('ht_gescom_company') || 'null');
-          const active = (saved && list.find(c => c.id === saved.id)) || list[0];
-          setupRealtime(active?.id);
-        }
+        await fetchUserCompanies(session.user.id);
       }
     });
 
     return () => {
       isMounted.current = false;
+      clearTimeout(safetyTimeout);
       listener?.subscription?.unsubscribe?.();
       realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
     };
-  }, []);
+  }, []); // eslint-disable-line
 
-  // ─── Changer de société ────────────────────────────────────────────
+  // ─── Changer de société ───────────────────────────────────────────
   const switchCompany = (company) => {
-    setCurrentCompany(company);   // store mémoire + localStorage
+    setCurrentCompany(company);
     setCurrentCompanyState(company);
     setupRealtime(company?.id);
     window.dispatchEvent(new CustomEvent('companyChanged', { detail: company }));
@@ -156,12 +155,8 @@ export function CompanyProvider({ children }) {
 
   return (
     <CompanyContext.Provider value={{
-      currentCompany,
-      companies,
-      loading,
-      initialized,
-      switchCompany,
-      refreshCompanies,
+      currentCompany, companies, loading,
+      initialized, switchCompany, refreshCompanies,
     }}>
       {children}
     </CompanyContext.Provider>
