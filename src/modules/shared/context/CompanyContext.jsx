@@ -1,4 +1,5 @@
-// CompanyContext.jsx — v5 : fix blocage démarrage + timeout sécurité
+// CompanyContext.jsx — v6 : fix "Chargement des données..." bloqué
+// Compatible tous appareils (iPad, Android, PC)
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { supabase, setCurrentCompany, clearCurrentCompany } from '../../../supabaseClient';
 
@@ -14,16 +15,18 @@ export const getCurrentCompany = () => {
 
 export function CompanyProvider({ children }) {
   const [currentCompany, setCurrentCompanyState] = useState(null);
-  const [companies, setCompanies]   = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [companies, setCompanies]     = useState([]);
+  const [loading, setLoading]         = useState(true);
   const [initialized, setInitialized] = useState(false);
   const realtimeChannels = useRef([]);
   const isMounted        = useRef(true);
-  const fetchInProgress  = useRef(false); // ← empêche les doubles appels
+  const fetchInProgress  = useRef(false);
+  const lastUserId       = useRef(null); // ← anti-doublon par userId
 
-  // ─── Reset état ───────────────────────────────────────────────────
+  // ─── Reset ────────────────────────────────────────────────────────
   const _resetState = () => {
     clearCurrentCompany();
+    lastUserId.current = null;
     if (!isMounted.current) return;
     setCompanies([]);
     setCurrentCompanyState(null);
@@ -36,8 +39,13 @@ export function CompanyProvider({ children }) {
   // ─── Charger les sociétés ─────────────────────────────────────────
   const fetchUserCompanies = async (userId) => {
     if (!userId) { _resetState(); return []; }
-    if (fetchInProgress.current) return []; // ← évite double appel
+
+    // Évite les doubles appels pour le même utilisateur
+    if (fetchInProgress.current) return [];
+    if (lastUserId.current === userId && initialized) return [];
+
     fetchInProgress.current = true;
+    lastUserId.current = userId;
 
     try {
       const { data, error } = await supabase
@@ -66,7 +74,7 @@ export function CompanyProvider({ children }) {
       return list;
 
     } catch (err) {
-      console.error('fetchUserCompanies:', err);
+      console.error('[CompanyContext] fetchUserCompanies:', err);
       return [];
     } finally {
       fetchInProgress.current = false;
@@ -101,21 +109,39 @@ export function CompanyProvider({ children }) {
     });
   };
 
-  // ─── Init au montage ──────────────────────────────────────────────
+  // ─── Init ─────────────────────────────────────────────────────────
   useEffect(() => {
     isMounted.current = true;
 
-    // ← NOUVEAU : timeout de sécurité 10 secondes
+    // Timeout de sécurité : 12s max, tous appareils confondus
     const safetyTimeout = setTimeout(() => {
       if (isMounted.current && loading) {
-        console.warn('[CompanyContext] Timeout démarrage — forçage sortie loading');
+        console.warn('[CompanyContext] Timeout — forçage sortie loading');
         setLoading(false);
         setInitialized(true);
       }
-    }, 10000);
+    }, 12000);
 
-    // ← NOUVEAU : on écoute onAuthStateChange UNIQUEMENT (plus de getSession séparé)
-    // onAuthStateChange déclenche INITIAL_SESSION au premier appel — c'est notre init
+    // ── ÉTAPE 1 : getSession() pour les appareils qui ne reçoivent
+    //             pas INITIAL_SESSION (iPad Safari, certains Android)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted.current) return;
+      if (session?.user?.id) {
+        fetchUserCompanies(session.user.id).then(() => {
+          clearTimeout(safetyTimeout);
+        });
+      } else {
+        // Pas de session → sortir du loading immédiatement
+        clearTimeout(safetyTimeout);
+        _resetState();
+      }
+    }).catch(() => {
+      // getSession() échoue → on laisse onAuthStateChange prendre le relais
+      console.warn('[CompanyContext] getSession() échoué, attente onAuthStateChange...');
+    });
+
+    // ── ÉTAPE 2 : onAuthStateChange pour les changements en cours de vie
+    //             (login, logout, refresh token)
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted.current) return;
 
@@ -125,7 +151,10 @@ export function CompanyProvider({ children }) {
         return;
       }
 
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      // SIGNED_IN = nouvel appareil ou nouvelle connexion
+      // TOKEN_REFRESHED = token expiré et renouvelé
+      // On NE traite PAS INITIAL_SESSION ici pour éviter le doublon avec getSession()
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         clearTimeout(safetyTimeout);
         if (isMounted.current) setLoading(true);
         await fetchUserCompanies(session.user.id);
@@ -150,6 +179,7 @@ export function CompanyProvider({ children }) {
 
   const refreshCompanies = async () => {
     const { data: { session } } = await supabase.auth.getSession();
+    lastUserId.current = null; // force le rechargement
     await fetchUserCompanies(session?.user?.id || null);
   };
 
