@@ -1,36 +1,47 @@
-// useRecuperations.js — avec Realtime sync
-import { useState, useEffect, useCallback } from 'react';
+// useRecuperations.js — v2 : fix loading infini + initialized guard
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchRecuperations, addRecuperation, updateRecuperation, deleteRecuperation } from '../../livraison/services/recuperationService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useRecuperations = () => {
   const [recuperations, setRecuperations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { currentCompany } = useCompany();
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState(null);
+  const { currentCompany, initialized } = useCompany();
+  const lastCompanyId = useRef(null);
 
-  const loadRecuperations = useCallback(async () => {
-    if (!currentCompany?.id) { setRecuperations([]); setLoading(false); return; }
+  const loadRecuperations = useCallback(async (companyId) => {
+    if (!companyId) { setRecuperations([]); setLoading(false); return; }
+    setLoading(true);
+    setError(null);
     try {
-      setError(null);
       const data = await fetchRecuperations();
       setRecuperations(data);
     } catch (err) {
+      console.error('useRecuperations:', err);
       setError(err.message);
+      setRecuperations([]);
     } finally {
       setLoading(false);
     }
-  }, [currentCompany?.id]);
+  }, []);
 
-  useEffect(() => { loadRecuperations(); }, [loadRecuperations]);
+  useEffect(() => {
+    if (!initialized) return;
+    const id = currentCompany?.id || null;
+    if (id === lastCompanyId.current) return;
+    lastCompanyId.current = id;
+    loadRecuperations(id);
+  }, [currentCompany?.id, initialized, loadRecuperations]);
 
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.table === 'recuperations') loadRecuperations();
+      if (e.detail?.table === 'recuperations' && currentCompany?.id)
+        loadRecuperations(currentCompany.id);
     };
     window.addEventListener('supabase_realtime', handler);
     return () => window.removeEventListener('supabase_realtime', handler);
-  }, [loadRecuperations]);
+  }, [currentCompany?.id, loadRecuperations]);
 
   const handleAddRecuperation = async (rec) => {
     try {
@@ -62,6 +73,6 @@ export const useRecuperations = () => {
     addRecuperation: handleAddRecuperation,
     updateRecuperation: handleUpdateRecuperation,
     deleteRecuperation: handleDeleteRecuperation,
-    reloadRecuperations: loadRecuperations,
+    reloadRecuperations: () => loadRecuperations(currentCompany?.id),
   };
 };

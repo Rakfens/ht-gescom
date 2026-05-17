@@ -1,38 +1,60 @@
-// useAgents.js — avec Realtime sync
-import { useState, useEffect, useCallback } from 'react';
+// useAgents.js — v2 : fix loading infini + setLoading(true) au rechargement
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchAgents, addAgent, updateAgent, deleteAgent } from '../../livraison/services/agentService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useAgents = () => {
-  const [agents, setAgents] = useState([]);
+  const [agents, setAgents]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { currentCompany } = useCompany();
+  const [error, setError]     = useState(null);
 
-  const loadAgents = useCallback(async () => {
-    if (!currentCompany?.id) { setAgents([]); setLoading(false); return; }
+  const { currentCompany, initialized } = useCompany();
+  const lastCompanyId = useRef(null);
+
+  const loadAgents = useCallback(async (companyId) => {
+    if (!companyId) {
+      setAgents([]);
+      setLoading(false);
+      return;
+    }
+    // ← AJOUT : setLoading(true) à chaque rechargement
+    setLoading(true);
+    setError(null);
     try {
-      setError(null);
       const data = await fetchAgents();
       setAgents(data);
     } catch (err) {
       console.error('useAgents:', err);
       setError(err.message);
+      setAgents([]);
     } finally {
       setLoading(false);
     }
-  }, [currentCompany?.id]);
+  }, []); // ← pas de dépendance, on passe companyId en paramètre
 
-  useEffect(() => { loadAgents(); }, [loadAgents]);
+  useEffect(() => {
+    // ← CORRIGÉ : attendre que CompanyContext soit initialisé
+    if (!initialized) return;
 
-  // 🔄 Realtime : recharger si changement sur 'agents'
+    const id = currentCompany?.id || null;
+
+    // ← évite de recharger si même société
+    if (id === lastCompanyId.current) return;
+    lastCompanyId.current = id;
+
+    loadAgents(id);
+  }, [currentCompany?.id, initialized, loadAgents]);
+
+  // Realtime
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.table === 'agents') loadAgents();
+      if (e.detail?.table === 'agents' && currentCompany?.id) {
+        loadAgents(currentCompany.id);
+      }
     };
     window.addEventListener('supabase_realtime', handler);
     return () => window.removeEventListener('supabase_realtime', handler);
-  }, [loadAgents]);
+  }, [currentCompany?.id, loadAgents]);
 
   const handleAddAgent = async (nom, salaire) => {
     try {
@@ -64,6 +86,6 @@ export const useAgents = () => {
     addAgent: handleAddAgent,
     updateAgent: handleUpdateAgent,
     deleteAgent: handleDeleteAgent,
-    reloadAgents: loadAgents,
+    reloadAgents: () => loadAgents(currentCompany?.id),
   };
 };
