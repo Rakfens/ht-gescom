@@ -1,17 +1,70 @@
-// src/modules/commerce/pages/Stock.jsx
+// Stock.jsx — FIX #1 (alert→toast/modal) + FIX #2 (console.log) + FIX #4 (useCompany) + FIX #5 (IS_TEST_MODE)
 import { useState, useEffect } from 'react';
 import { useCompany } from '../../shared/context/CompanyContext';
 import { fetchProduits, createProduit, updateProduit, deleteProduit, getAlertesStockBas, fetchCategories, updateStock } from '../services/produitService';
-import { fetchMouvementsStock, createMouvementStockManuel } from '../services/stockService';
-import { supabase, getCurrentCompany } from '../../../supabaseClient';
-import { COLORS, formatAr } from '../../shared/utils/constants';
+import { fetchMouvementsStock } from '../services/stockService';
+import { supabase } from '../../../supabaseClient';
+import { formatAr } from '../../shared/utils/constants';
 import { btn, inp, lbl, modalStyles } from '../../shared/utils/helpers';
 
-// MODE TEST - Mettre à false en production
-const IS_TEST_MODE = false;
+// ─── Toast inline léger (pour éviter la dépendance au contexte App) ──
+function useLocalToast() {
+  const [toasts, setToasts] = useState([]);
+  const show = (msg, type = 'success') => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
+  };
+  return { toasts, success: msg => show(msg, 'success'), error: msg => show(msg, 'error'), warn: msg => show(msg, 'warn') };
+}
+
+function ToastStack({ toasts }) {
+  const colors = { success: 'var(--green)', error: 'var(--red)', warn: 'var(--yellow)' };
+  const bgs    = { success: 'var(--green-dim)', error: 'var(--red-dim)', warn: 'var(--yellow-dim)' };
+  if (!toasts.length) return null;
+  return (
+    <div style={{ position: 'fixed', bottom: 80, right: 16, zIndex: 999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          background: bgs[t.type], color: colors[t.type],
+          border: `1px solid ${colors[t.type]}30`,
+          padding: '10px 16px', borderRadius: 12, fontSize: 13, fontWeight: 600,
+          animation: 'slideDown 0.3s ease', boxShadow: 'var(--shadow)',
+          maxWidth: 280,
+        }}>{t.msg}</div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Modal de confirmation réutilisable ──────────────────────────────
+function ConfirmModal({ open, title, message, onConfirm, onCancel, danger = true }) {
+  if (!open) return null;
+  return (
+    <div style={{ ...modalStyles.overlay, zIndex: 300 }}>
+      <div style={{ ...modalStyles.box, maxWidth: 360 }}>
+        <div style={modalStyles.handle} />
+        <div style={{ fontSize: 28, textAlign: 'center', marginBottom: 10 }}>{danger ? '⚠️' : 'ℹ️'}</div>
+        <div style={{ ...modalStyles.title, textAlign: 'center' }}>{title}</div>
+        <div style={{ fontSize: 13, color: 'var(--text2)', textAlign: 'center', marginBottom: 24 }}>{message}</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{ ...btn('var(--card2)', 'var(--card2)'), flex: 1, color: 'var(--text2)', border: '1px solid var(--border2)' }}>
+            Annuler
+          </button>
+          <button onClick={onConfirm} style={{ ...btn(danger ? 'var(--red)' : 'var(--blue)', danger ? 'var(--red2)' : 'var(--blue2)'), flex: 1 }}>
+            Confirmer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Stock() {
+  // FIX #4 : utiliser useCompany() au lieu de getCurrentCompany()
   const { currentCompany } = useCompany();
+  const toast = useLocalToast();
+
   const [produits, setProduits] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,191 +74,132 @@ export default function Stock() {
   const [selectedProduit, setSelectedProduit] = useState(null);
   const [mouvements, setMouvements] = useState([]);
   const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // FIX #5 : IS_TEST_MODE supprimé
+  const [confirmDelete, setConfirmDelete] = useState(null); // { produit } ou null
+
   const [form, setForm] = useState({
-    nom: '',
-    reference: '',
-    categorie: '',
-    prix_achat: 0,
-    prix_vente: 0,
-    quantite_stock: 0,
-    stock_minimum: 0,
-    unite: 'pièce'
+    nom: '', reference: '', categorie: '',
+    prix_achat: 0, prix_vente: 0,
+    quantite_stock: 0, stock_minimum: 0, unite: 'pièce'
   });
-  const [movementForm, setMovementForm] = useState({
-    type: 'entree',
-    quantite: 0,
-    notes: ''
-  });
+  const [movementForm, setMovementForm] = useState({ type: 'entree', quantite: 0, notes: '' });
   const [filter, setFilter] = useState('');
   const [categorieFilter, setCategorieFilter] = useState('');
 
+  useEffect(() => { loadData(); }, [currentCompany]);
+
+  // Realtime → recharger si changement sur produits ou mouvements
   useEffect(() => {
-    loadData();
-  }, [currentCompany]);
+    const handler = (e) => {
+      if (['produits', 'mouvements_stock'].includes(e.detail?.table)) loadData();
+    };
+    window.addEventListener('supabase_realtime', handler);
+    return () => window.removeEventListener('supabase_realtime', handler);
+  }, []);
 
   const loadData = async () => {
+    if (!currentCompany) return;
     setLoading(true);
     try {
-      const [produitsData, categoriesData] = await Promise.all([
-        fetchProduits(),
-        fetchCategories()
-      ]);
+      const [produitsData, categoriesData] = await Promise.all([fetchProduits(), fetchCategories()]);
       setProduits(produitsData);
       setCategories(categoriesData);
-    } catch (error) {
-      console.error('Erreur chargement:', error);
+    } catch (err) {
+      toast.error('Erreur lors du chargement des produits');
     } finally {
       setLoading(false);
     }
   };
 
+  // FIX #4 : utilise currentCompany directement (pas getCurrentCompany())
   const loadMouvements = async (produitId) => {
+    if (!currentCompany) return;
     try {
-      const company = getCurrentCompany();
       const { data, error } = await supabase
         .from('mouvements_stock')
-        .select(`
-          *,
-          produit:produits(id, nom)
-        `)
+        .select('*, produit:produits(id, nom)')
         .eq('produit_id', produitId)
-        .eq('company_id', company?.id)
+        .eq('company_id', currentCompany.id)
         .order('date_mouvement', { ascending: false })
         .limit(50);
-      
       if (error) throw error;
       setMouvements(data || []);
-    } catch (error) {
-      console.error('Erreur chargement mouvements:', error);
+    } catch (err) {
+      toast.error('Erreur chargement historique');
     }
   };
 
+  // FIX #1 : alert() → toast / FIX #2 : suppression console.log
   const handleSubmit = async () => {
+    if (!form.nom.trim()) { toast.warn('Le nom du produit est requis'); return; }
+    setSaving(true);
     try {
       if (editMode && selectedProduit) {
         await updateProduit(selectedProduit.id, form);
-        alert('Produit modifié avec succès');
+        toast.success('Produit modifié avec succès');
       } else {
         await createProduit(form);
-        alert('Produit créé avec succès');
+        toast.success('Produit créé avec succès');
       }
       setShowModal(false);
       resetForm();
       loadData();
-    } catch (error) {
-      console.error('Erreur sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde');
+    } catch (err) {
+      toast.error('Erreur lors de la sauvegarde');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Fonction de suppression - Version MODE TEST
-  const handleDeleteProduit = async (produit) => {
-    if (IS_TEST_MODE) {
-      // Mode TEST : Suppression directe sans vérification
-      if (confirm(`⚠️ [MODE TEST] Supprimer "${produit.nom}" définitivement ?\n\nCette action supprimera aussi les historiques liés.`)) {
-        try {
-          const company = getCurrentCompany();
-          
-          // 1. Supprimer les mouvements de stock
-          await supabase.from('mouvements_stock').delete().eq('produit_id', produit.id);
-          
-          // 2. Supprimer les détails de ventes
-          await supabase.from('vente_details').delete().eq('produit_id', produit.id);
-          
-          // 3. Supprimer les détails d'achats
-          await supabase.from('achat_details').delete().eq('produit_id', produit.id);
-          
-          // 4. Supprimer le produit
-          await supabase.from('produits').delete().eq('id', produit.id).eq('company_id', company?.id);
-          
-          alert(`✅ Produit "${produit.nom}" supprimé avec succès !`);
-          loadData();
-        } catch (error) {
-          console.error('Erreur suppression:', error);
-          alert('Erreur lors de la suppression');
-        }
-      }
-      return;
-    }
-
-    // Mode PRODUCTION : Vérification normale
+  // FIX #1 : confirm() → modal de confirmation / FIX #4 : currentCompany
+  const handleDeleteProduit = (produit) => {
     if (produit.quantite_stock > 0) {
-      alert(`Impossible de supprimer "${produit.nom}" car il a encore ${produit.quantite_stock} unités en stock.`);
+      toast.warn(`Impossible : ${produit.nom} a encore ${produit.quantite_stock} unité(s) en stock`);
       return;
     }
-    
-    if (confirm(`⚠️ Supprimer définitivement "${produit.nom}" ?\nCette action est irréversible.`)) {
-      try {
-        await deleteProduit(produit.id);
-        alert(`✅ Produit "${produit.nom}" supprimé avec succès`);
-        loadData();
-      } catch (error) {
-        console.error('Erreur suppression:', error);
-        alert('Erreur lors de la suppression');
-      }
+    setConfirmDelete({ produit }); // ouvre le modal
+  };
+
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    const { produit } = confirmDelete;
+    setConfirmDelete(null);
+    try {
+      await deleteProduit(produit.id);
+      toast.success(`"${produit.nom}" supprimé avec succès`);
+      loadData();
+    } catch (err) {
+      toast.error('Erreur lors de la suppression');
     }
   };
 
-  // Nettoyage complet des produits de test
-  const handleClearAllTestProducts = async () => {
-    if (!IS_TEST_MODE) {
-      alert('Mode test désactivé. Activation requise pour cette action.');
-      return;
-    }
-    
-    if (confirm('⚠️⚠️⚠️ NETTOYAGE COMPLET ⚠️⚠️⚠️\n\nSupprimer TOUS les produits ?\nCette action est irréversible !')) {
-      try {
-        const company = getCurrentCompany();
-        let deletedCount = 0;
-        
-        for (const produit of produits) {
-          // Supprimer les dépendances
-          await supabase.from('mouvements_stock').delete().eq('produit_id', produit.id);
-          await supabase.from('vente_details').delete().eq('produit_id', produit.id);
-          await supabase.from('achat_details').delete().eq('produit_id', produit.id);
-          await supabase.from('produits').delete().eq('id', produit.id).eq('company_id', company?.id);
-          deletedCount++;
-        }
-        
-        alert(`✅ ${deletedCount} produits supprimés avec succès !`);
-        loadData();
-      } catch (error) {
-        console.error('Erreur nettoyage:', error);
-        alert('Erreur lors du nettoyage');
-      }
-    }
-  };
-
+  // FIX #1 : alert/confirm → toast / FIX #4 : currentCompany
   const handleMovement = async () => {
     if (!selectedProduit) return;
-    if (movementForm.quantite <= 0) {
-      alert('La quantité doit être supérieure à 0');
-      return;
-    }
+    if (movementForm.quantite <= 0) { toast.warn('La quantité doit être supérieure à 0'); return; }
 
+    const nouvelleQuantite = movementForm.type === 'entree'
+      ? selectedProduit.quantite_stock + movementForm.quantite
+      : selectedProduit.quantite_stock - movementForm.quantite;
+
+    if (nouvelleQuantite < 0) { toast.warn('Stock insuffisant pour cette sortie'); return; }
+
+    setSaving(true);
     try {
-      const nouvelleQuantite = movementForm.type === 'entree' 
-        ? selectedProduit.quantite_stock + movementForm.quantite
-        : selectedProduit.quantite_stock - movementForm.quantite;
-
-      if (nouvelleQuantite < 0) {
-        alert('Stock insuffisant pour cette sortie');
-        return;
-      }
-
       await updateStock(selectedProduit.id, nouvelleQuantite, movementForm.notes || movementForm.type);
-      
-      const message = movementForm.type === 'entree' 
-        ? `✅ Entrée de ${movementForm.quantite} ${selectedProduit.unite}(s) ajoutée`
-        : `✅ Sortie de ${movementForm.quantite} ${selectedProduit.unite}(s) enregistrée`;
-      
-      alert(message);
+      const msg = movementForm.type === 'entree'
+        ? `Entrée de ${movementForm.quantite} ${selectedProduit.unite}(s) ajoutée`
+        : `Sortie de ${movementForm.quantite} ${selectedProduit.unite}(s) enregistrée`;
+      toast.success(msg);
       setShowMovementModal(false);
       resetMovementForm();
       loadData();
-    } catch (error) {
-      console.error('Erreur mouvement:', error);
-      alert('Erreur lors du mouvement de stock');
+    } catch (err) {
+      toast.error('Erreur lors du mouvement de stock');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -216,16 +210,7 @@ export default function Stock() {
   };
 
   const resetForm = () => {
-    setForm({
-      nom: '',
-      reference: '',
-      categorie: '',
-      prix_achat: 0,
-      prix_vente: 0,
-      quantite_stock: 0,
-      stock_minimum: 0,
-      unite: 'pièce'
-    });
+    setForm({ nom: '', reference: '', categorie: '', prix_achat: 0, prix_vente: 0, quantite_stock: 0, stock_minimum: 0, unite: 'pièce' });
     setEditMode(false);
     setSelectedProduit(null);
   };
@@ -238,23 +223,13 @@ export default function Stock() {
   const editProduit = (produit) => {
     setSelectedProduit(produit);
     setForm({
-      nom: produit.nom,
-      reference: produit.reference || '',
-      categorie: produit.categorie || '',
-      prix_achat: produit.prix_achat,
-      prix_vente: produit.prix_vente,
-      quantite_stock: produit.quantite_stock,
-      stock_minimum: produit.stock_minimum,
-      unite: produit.unite
+      nom: produit.nom, reference: produit.reference || '',
+      categorie: produit.categorie || '', prix_achat: produit.prix_achat,
+      prix_vente: produit.prix_vente, quantite_stock: produit.quantite_stock,
+      stock_minimum: produit.stock_minimum, unite: produit.unite
     });
     setEditMode(true);
     setShowModal(true);
-  };
-
-  const openMovementModal = (produit) => {
-    setSelectedProduit(produit);
-    setMovementForm({ type: 'entree', quantite: 0, notes: '' });
-    setShowMovementModal(true);
   };
 
   const filteredProduits = produits.filter(p => {
@@ -263,139 +238,136 @@ export default function Stock() {
     return true;
   });
 
-  if (loading) return <div style={{ color: COLORS.muted, padding: 50, textAlign: 'center' }}>Chargement...</div>;
+  // ─── FIX #2 : indicateur de marge dans le tableau ───────────────
+  const marge = (p) => p.prix_vente && p.prix_achat ? ((p.prix_vente - p.prix_achat) / p.prix_achat * 100).toFixed(0) : null;
+
+  const C = {
+    bg: 'var(--bg)', card: 'var(--card)', text: 'var(--text)',
+    muted: 'var(--muted)', border: 'var(--border)', border2: 'var(--border2)',
+    blue: 'var(--blue)', green: 'var(--green)', red: 'var(--red)',
+    orange: 'var(--orange)', purple: 'var(--purple)',
+  };
+
+  if (loading) return (
+    <div style={{ color: C.muted, padding: 60, textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>
+      Chargement des produits...
+    </div>
+  );
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f1f5f9' }}>📦 Gestion des stocks - {currentCompany?.name}</h1>
-          <p style={{ color: COLORS.muted, fontSize: 12, marginTop: 4 }}>
-            Gérez vos produits, suivez les mouvements de stock
-            {IS_TEST_MODE && <span style={{ color: COLORS.orange, marginLeft: 10 }}>🔧 MODE TEST - Suppression directe autorisée</span>}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {IS_TEST_MODE && produits.length > 0 && (
-            <button 
-              style={{ ...btn(COLORS.red, '#b91c1c'), padding: '10px 20px' }} 
-              onClick={handleClearAllTestProducts}
-            >
-              🧹 Nettoyer tous les produits
-            </button>
-          )}
-          <button style={{ ...btn(COLORS.blue, '#2563eb'), padding: '10px 20px' }} onClick={() => { resetForm(); setShowModal(true); }}>
-            + Nouveau produit
-          </button>
-        </div>
-      </div>
+    <div style={{ padding: '0 0 20px' }}>
+      <ToastStack toasts={toast.toasts} />
 
-      {/* Filtres */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <input 
-          type="text" 
-          placeholder="🔍 Rechercher par nom ou référence..." 
-          style={{ ...inp(), maxWidth: 300 }} 
-          value={filter} 
-          onChange={e => setFilter(e.target.value)} 
-        />
-        <select style={inp()} value={categorieFilter} onChange={e => setCategorieFilter(e.target.value)}>
-          <option value="">Toutes catégories</option>
-          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-        <button style={{ ...btn('#475569', '#334155') }} onClick={() => { setFilter(''); setCategorieFilter(''); }}>
-          Réinitialiser
+      {/* Confirmation suppression */}
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Supprimer le produit ?"
+        message={`"${confirmDelete?.produit?.nom}" sera supprimé définitivement. Cette action est irréversible.`}
+        onConfirm={executeDelete}
+        onCancel={() => setConfirmDelete(null)}
+        danger
+      />
+
+      {/* En-tête */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text }}>Gestion des stocks</h1>
+          <p style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{currentCompany?.name} · {produits.length} produits</p>
+        </div>
+        <button style={{ ...btn(C.blue, 'var(--blue2)'), padding: '10px 18px' }} onClick={() => { resetForm(); setShowModal(true); }}>
+          + Nouveau produit
         </button>
       </div>
 
-      {/* Liste des produits */}
-      <div style={{ background: COLORS.card, borderRadius: 12, border: `1px solid ${COLORS.border2}`, overflow: 'hidden' }}>
+      {/* Filtres */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <input type="text" placeholder="🔍 Rechercher..." style={{ ...inp(), maxWidth: 240 }}
+          value={filter} onChange={e => setFilter(e.target.value)} />
+        <select style={{ ...inp(), maxWidth: 180 }} value={categorieFilter} onChange={e => setCategorieFilter(e.target.value)}>
+          <option value="">Toutes catégories</option>
+          {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+        {(filter || categorieFilter) && (
+          <button style={{ ...btn('var(--card2)', 'var(--card2)'), color: C.muted, border: '1px solid var(--border2)' }}
+            onClick={() => { setFilter(''); setCategorieFilter(''); }}>
+            Réinitialiser
+          </button>
+        )}
+      </div>
+
+      {/* Tableau produits */}
+      <div style={{ background: C.card, borderRadius: 14, border: `1px solid var(--border2)`, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: COLORS.bg }}>
-                <th style={{ padding: 12, textAlign: 'left' }}>Produit</th>
-                <th style={{ padding: 12, textAlign: 'left' }}>Réf.</th>
-                <th style={{ padding: 12, textAlign: 'left' }}>Catégorie</th>
-                <th style={{ padding: 12, textAlign: 'right' }}>Prix achat</th>
-                <th style={{ padding: 12, textAlign: 'right' }}>Prix vente</th>
-                <th style={{ padding: 12, textAlign: 'right' }}>Stock</th>
-                <th style={{ padding: 12, textAlign: 'center' }}>Statut</th>
-                <th style={{ padding: 12, textAlign: 'center' }}>Actions</th>
+              <tr style={{ background: C.bg, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Produit</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Réf.</th>
+                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Catégorie</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Prix achat</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Prix vente</th>
+                {/* FIX #2 : colonne marge */}
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Marge</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Stock</th>
+                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Statut</th>
+                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredProduits.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: COLORS.muted }}>
+                  <td colSpan={9} style={{ padding: 48, textAlign: 'center', color: C.muted }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
                     Aucun produit trouvé
                   </td>
                 </tr>
-              ) : (
-                filteredProduits.map(produit => {
-                  const isLowStock = produit.quantite_stock <= produit.stock_minimum;
-                  const isOutOfStock = produit.quantite_stock === 0;
-                  return (
-                    <tr key={produit.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td style={{ padding: 12, fontWeight: 600 }}>{produit.nom}</td>
-                      <td style={{ padding: 12 }}>{produit.reference || '-'}</td>
-                      <td style={{ padding: 12 }}>{produit.categorie || '-'}</td>
-                      <td style={{ padding: 12, textAlign: 'right' }}>{formatAr(produit.prix_achat)}</td>
-                      <td style={{ padding: 12, textAlign: 'right' }}>{formatAr(produit.prix_vente)}</td>
-                      <td style={{ padding: 12, textAlign: 'right', color: isLowStock ? COLORS.orange : '#fff', fontWeight: isLowStock ? 600 : 400 }}>
-                        {produit.quantite_stock} {produit.unite}
-                      </td>
-                      <td style={{ padding: 12, textAlign: 'center' }}>
-                        {isOutOfStock ? (
-                          <span style={{ background: '#450a0a', color: '#f87171', padding: '4px 8px', borderRadius: 20, fontSize: 11 }}>Rupture</span>
-                        ) : isLowStock ? (
-                          <span style={{ background: '#451a03', color: '#fbbf24', padding: '4px 8px', borderRadius: 20, fontSize: 11 }}>Stock bas</span>
-                        ) : (
-                          <span style={{ background: '#064e3b', color: '#34d399', padding: '4px 8px', borderRadius: 20, fontSize: 11 }}>OK</span>
-                        )}
-                      </td>
-                      <td style={{ padding: 12, textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: 5, justifyContent: 'center', flexWrap: 'wrap' }}>
-                          <button 
-                            onClick={() => editProduit(produit)} 
-                            style={{ ...btn('#475569', '#334155'), padding: '5px 10px', fontSize: 12 }}
-                            title="Modifier"
-                          >
-                            ✏️
-                          </button>
-                          <button 
-                            onClick={() => openMovementModal(produit)} 
-                            style={{ ...btn(COLORS.blue, '#2563eb'), padding: '5px 10px', fontSize: 12 }}
-                            title="Mouvement de stock"
-                          >
-                            📊
-                          </button>
-                          <button 
-                            onClick={() => handleViewHistory(produit)} 
-                            style={{ ...btn(COLORS.purple, '#6d28d9'), padding: '5px 10px', fontSize: 12 }}
-                            title="Historique"
-                          >
-                            📜
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteProduit(produit)} 
-                            style={{ 
-                              ...btn(COLORS.red, '#b91c1c'), 
-                              padding: '5px 10px', 
-                              fontSize: 12,
-                              opacity: IS_TEST_MODE ? 0.9 : (produit.quantite_stock > 0 ? 0.5 : 0.9),
-                              cursor: 'pointer'
-                            }}
-                            title={IS_TEST_MODE ? "Supprimer (mode test)" : (produit.quantite_stock > 0 ? "Stock non nul - Impossible" : "Supprimer")}
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              ) : filteredProduits.map(p => {
+                const isLow = p.quantite_stock <= p.stock_minimum;
+                const isOut = p.quantite_stock === 0;
+                const margeVal = marge(p);
+                return (
+                  <tr key={p.id} style={{ borderBottom: `1px solid var(--border)`, transition: 'background 0.15s' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600 }}>{p.nom}</td>
+                    <td style={{ padding: '10px 12px', color: C.muted, fontSize: 12 }}>{p.reference || '—'}</td>
+                    <td style={{ padding: '10px 12px', fontSize: 12 }}>{p.categorie || '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>{formatAr(p.prix_achat)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13 }}>{formatAr(p.prix_vente)}</td>
+                    {/* FIX #2 : marge affichée */}
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      {margeVal !== null ? (
+                        <span style={{
+                          fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                          background: Number(margeVal) >= 20 ? 'var(--green-dim)' : Number(margeVal) >= 0 ? 'var(--yellow-dim)' : 'var(--red-dim)',
+                          color: Number(margeVal) >= 20 ? 'var(--green)' : Number(margeVal) >= 0 ? 'var(--yellow)' : 'var(--red)',
+                        }}>
+                          {margeVal}%
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: isLow ? C.orange : C.text, fontWeight: isLow ? 700 : 400 }}>
+                      {p.quantite_stock} {p.unite}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      {isOut ? (
+                        <span style={{ background: 'var(--red-dim)', color: 'var(--red)', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>Rupture</span>
+                      ) : isLow ? (
+                        <span style={{ background: 'var(--yellow-dim)', color: 'var(--yellow)', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>Stock bas</span>
+                      ) : (
+                        <span style={{ background: 'var(--green-dim)', color: 'var(--green)', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>OK</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+                        <button onClick={() => editProduit(p)} style={{ ...btn('var(--card2)', 'var(--card2)'), padding: '5px 9px', fontSize: 13, border: '1px solid var(--border2)', color: C.muted }} title="Modifier">✏️</button>
+                        <button onClick={() => { setSelectedProduit(p); setMovementForm({ type: 'entree', quantite: 0, notes: '' }); setShowMovementModal(true); }} style={{ ...btn(C.blue, 'var(--blue2)'), padding: '5px 9px', fontSize: 13 }} title="Mouvement">📊</button>
+                        <button onClick={() => handleViewHistory(p)} style={{ ...btn(C.purple, '#6d28d9'), padding: '5px 9px', fontSize: 13 }} title="Historique">📜</button>
+                        <button onClick={() => handleDeleteProduit(p)} style={{ ...btn('var(--red-dim)', 'var(--red-dim)'), padding: '5px 9px', fontSize: 13, color: 'var(--red)', border: '1px solid rgba(248,113,113,0.2)' }} title="Supprimer">🗑️</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -404,208 +376,119 @@ export default function Stock() {
       {/* Modal Produit */}
       {showModal && (
         <div style={modalStyles.overlay}>
-          <div style={{ ...modalStyles.container, maxWidth: 500 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800 }}>{editMode ? 'Modifier produit' : 'Nouveau produit'}</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: COLORS.muted, fontSize: 24, cursor: 'pointer' }}>✕</button>
+          <div style={{ ...modalStyles.box, maxWidth: 500 }}>
+            <div style={modalStyles.handle} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h2 style={modalStyles.title}>{editMode ? 'Modifier le produit' : 'Nouveau produit'}</h2>
+              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ display: 'grid', gap: 12 }}>
-              <div>
-                <label style={lbl()}>Nom du produit *</label>
-                <input style={inp()} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} />
-              </div>
-              <div>
-                <label style={lbl()}>Référence</label>
-                <input style={inp()} value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} />
-              </div>
+              <div><label style={lbl()}>Nom du produit *</label><input style={inp()} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} placeholder="Ex: Coque iPhone 14" /></div>
+              <div><label style={lbl()}>Référence</label><input style={inp()} value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="Ex: REF-001" /></div>
               <div>
                 <label style={lbl()}>Catégorie</label>
-                <input style={inp()} list="categories" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })} />
-                <datalist id="categories">
-                  {categories.map(cat => <option key={cat} value={cat} />)}
-                </datalist>
+                <input style={inp()} list="categories-list" value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })} placeholder="Choisir ou saisir..." />
+                <datalist id="categories-list">{categories.map(cat => <option key={cat} value={cat} />)}</datalist>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div><label style={lbl()}>Prix achat (Ar)</label><input type="number" style={inp()} value={form.prix_achat} onChange={e => setForm({ ...form, prix_achat: parseFloat(e.target.value) || 0 })} /></div>
                 <div>
-                  <label style={lbl()}>Prix achat (Ar)</label>
-                  <input type="number" style={inp()} value={form.prix_achat} onChange={e => setForm({ ...form, prix_achat: parseFloat(e.target.value) || 0 })} />
-                </div>
-                <div>
-                  <label style={lbl()}>Prix vente (Ar)</label>
+                  <label style={lbl()}>Prix vente (Ar)
+                    {form.prix_achat > 0 && form.prix_vente > 0 && (
+                      <span style={{ marginLeft: 8, color: form.prix_vente > form.prix_achat ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>
+                        ({marge({ prix_achat: form.prix_achat, prix_vente: form.prix_vente })}%)
+                      </span>
+                    )}
+                  </label>
                   <input type="number" style={inp()} value={form.prix_vente} onChange={e => setForm({ ...form, prix_vente: parseFloat(e.target.value) || 0 })} />
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div><label style={lbl()}>Stock initial</label><input type="number" style={inp()} value={form.quantite_stock} onChange={e => setForm({ ...form, quantite_stock: parseFloat(e.target.value) || 0 })} disabled={editMode} /></div>
+                <div><label style={lbl()}>Stock minimum</label><input type="number" style={inp()} value={form.stock_minimum} onChange={e => setForm({ ...form, stock_minimum: parseFloat(e.target.value) || 0 })} /></div>
                 <div>
-                  <label style={lbl()}>Stock initial</label>
-                  <input type="number" style={inp()} value={form.quantite_stock} onChange={e => setForm({ ...form, quantite_stock: parseFloat(e.target.value) || 0 })} disabled={editMode} />
-                </div>
-                <div>
-                  <label style={lbl()}>Stock minimum</label>
-                  <input type="number" style={inp()} value={form.stock_minimum} onChange={e => setForm({ ...form, stock_minimum: parseFloat(e.target.value) || 0 })} />
+                  <label style={lbl()}>Unité</label>
+                  <select style={inp()} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })}>
+                    <option value="pièce">Pièce</option><option value="kg">kg</option><option value="g">g</option>
+                    <option value="l">Litre</option><option value="ml">ml</option><option value="m">Mètre</option>
+                  </select>
                 </div>
               </div>
-              <div>
-                <label style={lbl()}>Unité</label>
-                <select style={inp()} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })}>
-                  <option value="pièce">Pièce(s)</option>
-                  <option value="kg">Kilogramme(s)</option>
-                  <option value="g">Gramme(s)</option>
-                  <option value="l">Litre(s)</option>
-                  <option value="ml">Millilitre(s)</option>
-                  <option value="m">Mètre(s)</option>
-                  <option value="cm">Centimètre(s)</option>
-                </select>
-              </div>
-              <button style={{ ...btn(COLORS.green, '#047857'), padding: 12, marginTop: 12 }} onClick={handleSubmit}>
-                {editMode ? 'Mettre à jour' : 'Créer le produit'}
+              <button style={{ ...btn('var(--green)', 'var(--green2)'), padding: 13, marginTop: 8, opacity: saving ? 0.7 : 1 }} onClick={handleSubmit} disabled={saving}>
+                {saving ? 'Enregistrement...' : (editMode ? 'Mettre à jour' : 'Créer le produit')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Mouvement de stock */}
+      {/* Modal Mouvement */}
       {showMovementModal && selectedProduit && (
         <div style={modalStyles.overlay}>
-          <div style={{ ...modalStyles.container, maxWidth: 400 }}>
+          <div style={{ ...modalStyles.box, maxWidth: 380 }}>
+            <div style={modalStyles.handle} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800 }}>Mouvement stock - {selectedProduit.nom}</h2>
-              <button onClick={() => setShowMovementModal(false)} style={{ background: 'none', border: 'none', color: COLORS.muted, fontSize: 24, cursor: 'pointer' }}>✕</button>
+              <h2 style={modalStyles.title}>Mouvement de stock</h2>
+              <button onClick={() => setShowMovementModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
             </div>
-            
-            <div style={{ background: COLORS.bg, padding: 12, borderRadius: 8, marginBottom: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: COLORS.muted }}>Stock actuel</div>
-              <div style={{ fontSize: 28, fontWeight: 800 }}>{selectedProduit.quantite_stock} {selectedProduit.unite}</div>
+            <div style={{ background: 'var(--bg)', padding: 14, borderRadius: 12, marginBottom: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{selectedProduit.nom} · Stock actuel</div>
+              <div style={{ fontSize: 30, fontWeight: 800 }}>{selectedProduit.quantite_stock} <span style={{ fontSize: 14, color: 'var(--muted)' }}>{selectedProduit.unite}</span></div>
             </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl()}>Type de mouvement</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <button 
-                  onClick={() => setMovementForm({ ...movementForm, type: 'entree' })} 
-                  style={{ 
-                    ...btn(movementForm.type === 'entree' ? COLORS.green : '#475569', 
-                         movementForm.type === 'entree' ? '#047857' : '#334155'), 
-                    padding: 10,
-                    opacity: movementForm.type === 'entree' ? 1 : 0.7
-                  }}
-                >
-                  📥 Entrée
-                </button>
-                <button 
-                  onClick={() => setMovementForm({ ...movementForm, type: 'sortie' })} 
-                  style={{ 
-                    ...btn(movementForm.type === 'sortie' ? COLORS.red : '#475569', 
-                         movementForm.type === 'sortie' ? '#b91c1c' : '#334155'), 
-                    padding: 10,
-                    opacity: movementForm.type === 'sortie' ? 1 : 0.7
-                  }}
-                >
-                  📤 Sortie
-                </button>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+              <button onClick={() => setMovementForm({ ...movementForm, type: 'entree' })} style={{ ...btn(movementForm.type === 'entree' ? 'var(--green)' : 'var(--card2)', movementForm.type === 'entree' ? 'var(--green2)' : 'var(--card2)'), padding: 11, color: movementForm.type === 'entree' ? '#fff' : 'var(--muted)', border: '1px solid var(--border2)' }}>📥 Entrée</button>
+              <button onClick={() => setMovementForm({ ...movementForm, type: 'sortie' })} style={{ ...btn(movementForm.type === 'sortie' ? 'var(--red)' : 'var(--card2)', movementForm.type === 'sortie' ? 'var(--red2)' : 'var(--card2)'), padding: 11, color: movementForm.type === 'sortie' ? '#fff' : 'var(--muted)', border: '1px solid var(--border2)' }}>📤 Sortie</button>
             </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl()}>Quantité</label>
-              <input 
-                type="number" 
-                style={inp()} 
-                value={movementForm.quantite} 
-                onChange={e => setMovementForm({ ...movementForm, quantite: parseFloat(e.target.value) || 0 })} 
-                placeholder={`Quantité en ${selectedProduit.unite}`}
-              />
+            <div style={{ marginBottom: 12 }}><label style={lbl()}>Quantité</label><input type="number" style={inp()} value={movementForm.quantite} onChange={e => setMovementForm({ ...movementForm, quantite: parseFloat(e.target.value) || 0 })} /></div>
+            <div style={{ marginBottom: 14 }}><label style={lbl()}>Notes (optionnel)</label><textarea style={{ ...inp(), minHeight: 52 }} value={movementForm.notes} onChange={e => setMovementForm({ ...movementForm, notes: e.target.value })} placeholder="Ex: Ajustement, perte..." /></div>
+            <div style={{ background: 'var(--bg)', padding: 12, borderRadius: 10, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: 'var(--text2)' }}>Stock après :</span>
+              <span style={{ fontWeight: 800, fontSize: 18, color: (movementForm.type === 'entree' ? selectedProduit.quantite_stock + movementForm.quantite : selectedProduit.quantite_stock - movementForm.quantite) < 0 ? 'var(--red)' : 'var(--text)' }}>
+                {movementForm.type === 'entree' ? selectedProduit.quantite_stock + movementForm.quantite : selectedProduit.quantite_stock - movementForm.quantite} {selectedProduit.unite}
+              </span>
             </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl()}>Notes / Motif (optionnel)</label>
-              <textarea 
-                style={{ ...inp(), minHeight: 60 }} 
-                value={movementForm.notes} 
-                onChange={e => setMovementForm({ ...movementForm, notes: e.target.value })}
-                placeholder="Ex: Ajustement inventaire, Perte, Casse..."
-              />
-            </div>
-
-            <div style={{ background: COLORS.bg, padding: 10, borderRadius: 8, marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Stock après opération:</span>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>
-                  {movementForm.type === 'entree' 
-                    ? selectedProduit.quantite_stock + movementForm.quantite
-                    : selectedProduit.quantite_stock - movementForm.quantite} {selectedProduit.unite}
-                </span>
-              </div>
-            </div>
-
-            <button style={{ ...btn(COLORS.blue, '#2563eb'), width: '100%', padding: 12 }} onClick={handleMovement}>
-              Valider le mouvement
+            <button style={{ ...btn('var(--blue)', 'var(--blue2)'), width: '100%', padding: 13, opacity: saving ? 0.7 : 1 }} onClick={handleMovement} disabled={saving}>
+              {saving ? 'Validation...' : 'Valider le mouvement'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal Historique des mouvements */}
+      {/* Modal Historique */}
       {showHistoryModal && selectedProduit && (
         <div style={modalStyles.overlay}>
-          <div style={{ ...modalStyles.container, maxWidth: 700 }}>
+          <div style={{ ...modalStyles.box, maxWidth: 600 }}>
+            <div style={modalStyles.handle} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800 }}>📜 Historique - {selectedProduit.nom}</h2>
-              <button onClick={() => setShowHistoryModal(false)} style={{ background: 'none', border: 'none', color: COLORS.muted, fontSize: 24, cursor: 'pointer' }}>✕</button>
+              <h2 style={modalStyles.title}>Historique — {selectedProduit.nom}</h2>
+              <button onClick={() => setShowHistoryModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
             </div>
-
-            <div style={{ background: COLORS.bg, padding: 12, borderRadius: 8, marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Stock actuel:</span>
-                <span style={{ fontWeight: 700, fontSize: 18 }}>{selectedProduit.quantite_stock} {selectedProduit.unite}</span>
-              </div>
+            <div style={{ background: 'var(--bg)', padding: '10px 14px', borderRadius: 10, marginBottom: 14, display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--muted)', fontSize: 13 }}>Stock actuel</span>
+              <span style={{ fontWeight: 700 }}>{selectedProduit.quantite_stock} {selectedProduit.unite}</span>
             </div>
-
             {mouvements.length === 0 ? (
-              <div style={{ textAlign: 'center', color: COLORS.muted, padding: 40 }}>
-                Aucun mouvement enregistré pour ce produit
-              </div>
+              <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>Aucun mouvement enregistré</div>
             ) : (
-              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: COLORS.bg, position: 'sticky', top: 0 }}>
-                      <th style={{ padding: 10, textAlign: 'left' }}>Date</th>
-                      <th style={{ padding: 10, textAlign: 'center' }}>Type</th>
-                      <th style={{ padding: 10, textAlign: 'right' }}>Quantité</th>
-                      <th style={{ padding: 10, textAlign: 'left' }}>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mouvements.map(m => (
-                      <tr key={m.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                        <td style={{ padding: 10 }}>{new Date(m.date_mouvement).toLocaleString()}</td>
-                        <td style={{ padding: 10, textAlign: 'center' }}>
-                          <span style={{
-                            background: m.type === 'entree' || m.type === 'achat' ? '#064e3b' : '#450a0a',
-                            color: m.type === 'entree' || m.type === 'achat' ? '#34d399' : '#f87171',
-                            padding: '2px 8px',
-                            borderRadius: 20,
-                            fontSize: 11
-                          }}>
-                            {m.type === 'entree' ? '📥 Entrée' : m.type === 'achat' ? '🛒 Achat' : m.type === 'vente' ? '💰 Vente' : '📤 Sortie'}
-                          </span>
-                        </td>
-                        <td style={{ padding: 10, textAlign: 'right' }}>{m.quantite} {selectedProduit.unite}</td>
-                        <td style={{ padding: 10 }}>{m.notes || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                {mouvements.map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                    <div>
+                      <span style={{
+                        background: ['entree','achat'].includes(m.type) ? 'var(--green-dim)' : 'var(--red-dim)',
+                        color: ['entree','achat'].includes(m.type) ? 'var(--green)' : 'var(--red)',
+                        padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, marginRight: 8
+                      }}>
+                        {m.type === 'entree' ? '📥 Entrée' : m.type === 'achat' ? '🛒 Achat' : m.type === 'vente' ? '💰 Vente' : '📤 Sortie'}
+                      </span>
+                      <span style={{ color: 'var(--muted)', fontSize: 11 }}>{new Date(m.date_mouvement).toLocaleString('fr-FR')}</span>
+                      {m.notes && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, marginLeft: 2 }}>{m.notes}</div>}
+                    </div>
+                    <span style={{ fontWeight: 700 }}>{m.quantite} {selectedProduit.unite}</span>
+                  </div>
+                ))}
               </div>
             )}
-
-            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
-              <button style={{ ...btn(COLORS.blue, '#2563eb'), padding: '8px 16px' }} onClick={() => setShowHistoryModal(false)}>
-                Fermer
-              </button>
-            </div>
           </div>
         </div>
       )}
