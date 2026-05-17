@@ -1,5 +1,5 @@
-// App.jsx — v7 : logique d'affichage simple et fiable
-import { useState, useEffect } from 'react';
+// App.jsx — v8 : persistance page + société iOS, Dynamic Island safe
+import { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider }                   from './modules/shared/context/ThemeContext';
 import { CompanyProvider }                 from './modules/shared/context/CompanyContext';
 import { AppProvider, useApp }             from './modules/shared/context/AppContext';
@@ -9,8 +9,8 @@ import { Login }                           from './modules/shared/components/Aut
 import { Header }                          from './modules/shared/components/Layout/Header';
 import { Sidebar }                         from './modules/shared/components/Layout/Sidebar';
 import { BottomNav }                       from './modules/shared/components/Layout/BottomNav';
+import { loadSavedPage, saveAppState }     from './modules/shared/hooks/useAppState';
 
-// Modules livraison
 import { Dashboard as ServiceDashboard }   from './modules/livraison/pages/Dashboard';
 import { LivraisonForm }                   from './modules/livraison/components/LivraisonForm';
 import { Historique }                      from './modules/livraison/pages/Historique';
@@ -19,8 +19,6 @@ import { Recap }                           from './modules/livraison/pages/Recap
 import { Agents }                          from './modules/livraison/pages/Agents';
 import { Recuperation }                    from './modules/livraison/pages/Recuperation';
 import Depenses                            from './modules/commerce/pages/Depenses';
-
-// Modules commerce
 import CommerceDashboard                   from './modules/commerce/pages/Dashboard';
 import Ventes                              from './modules/commerce/pages/Ventes';
 import Achats                              from './modules/commerce/pages/Achats';
@@ -28,41 +26,19 @@ import Stock                               from './modules/commerce/pages/Stock'
 import Inventaire                          from './modules/commerce/pages/Inventaire';
 import Rapports                            from './modules/commerce/pages/Rapports';
 
-// ─── Écran "aucune société" ───────────────────────────────────────────
 function NoCompanyScreen({ logout }) {
   return (
-    <div style={{
-      minHeight: '100vh', background: 'var(--bg)',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      gap: 16, padding: 24,
-    }}>
-      <div style={{ fontSize: 52 }}>🏢</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', textAlign: 'center' }}>
-        Aucune société assignée
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
-        Contactez votre administrateur pour être assigné à une société.
-      </div>
-      {/* Bouton TOUJOURS cliquable — pas de loading overlay par-dessus */}
-      <button
-        onClick={logout}
-        style={{
-          marginTop: 12, padding: '13px 28px',
-          background: 'var(--red-dim)', color: 'var(--red)',
-          border: '1px solid rgba(248,113,113,0.3)',
-          borderRadius: 13, cursor: 'pointer',
-          fontWeight: 700, fontSize: 14,
-          fontFamily: 'var(--font)',
-        }}
-      >
+    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
+      <div style={{ fontSize:52 }}>🏢</div>
+      <div style={{ fontSize:18, fontWeight:700, color:'var(--text)', textAlign:'center' }}>Aucune société assignée</div>
+      <div style={{ fontSize:13, color:'var(--muted)', textAlign:'center' }}>Contactez votre administrateur.</div>
+      <button onClick={logout} style={{ marginTop:12, padding:'13px 28px', background:'var(--red-dim)', color:'var(--red)', border:'1px solid rgba(248,113,113,0.3)', borderRadius:13, cursor:'pointer', fontWeight:700, fontSize:14, fontFamily:'var(--font)' }}>
         Se déconnecter
       </button>
     </div>
   );
 }
 
-// ─── Contenu principal ────────────────────────────────────────────────
 function AppContent() {
   const {
     user, authLoading, companyLoading, logout,
@@ -75,7 +51,8 @@ function AppContent() {
     toasts, hideToast, success,
   } = useApp();
 
-  const [page,     setPage]     = useState('dashboard');
+  // ── Persistance de la page (survit à la réduction iOS) ────────────
+  const [page, setPage] = useState(() => loadSavedPage());
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [logoUrl,  setLogoUrl]  = useState(null);
 
@@ -85,7 +62,29 @@ function AppContent() {
     return () => window.removeEventListener('resize', fn);
   }, []);
 
-  const nav     = p => setPage(p);
+  // Sauvegarder page ET companyId à chaque changement
+  const nav = useCallback((p) => {
+    setPage(p);
+    saveAppState(p, currentCompany?.id);
+  }, [currentCompany]);
+
+  // Quand la société change (ex: après réouverture), sauvegarder
+  useEffect(() => {
+    if (currentCompany?.id) saveAppState(page, currentCompany.id);
+  }, [currentCompany?.id]);
+
+  // Valider que la page actuelle est valide pour la société chargée
+  useEffect(() => {
+    if (!currentCompany) return;
+    const servicePages   = ['dashboard','livraison','historique','gerant','recap','agents','recuperation','depenses'];
+    const commercePages  = ['dashboard','ventes','achats','stock','inventaire','depenses','rapports'];
+    const validPages     = currentCompany.type === 'service' ? servicePages : commercePages;
+    if (!validPages.includes(page)) {
+      setPage('dashboard');
+      saveAppState('dashboard', currentCompany.id);
+    }
+  }, [currentCompany?.id]);
+
   const enCours = livraisons?.filter(l => l.statut === 'en_cours').length || 0;
   const suggestions = {
     clients:   [...new Set(livraisons?.map(l => l.client_donneur).filter(Boolean) || [])],
@@ -93,19 +92,11 @@ function AppContent() {
     lieux:     [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])],
   };
 
-  // ── 1. Auth en cours de résolution (max 4s) ──────────────────────
-  if (authLoading) return <Loader message="Démarrage..." timeout={4000} />;
-
-  // ── 2. Non connecté → Login ───────────────────────────────────────
-  if (!user) return <Login />;
-
-  // ── 3. Connecté, sociétés en cours de chargement ─────────────────
-  if (companyLoading) return <Loader message="Chargement..." timeout={8000} />;
-
-  // ── 4. Connecté mais aucune société → écran dédié avec logout ────
+  if (authLoading)    return <Loader message="Démarrage..."       timeout={4000} />;
+  if (!user)          return <Login />;
+  if (companyLoading) return <Loader message="Chargement..."      timeout={8000} />;
   if (!currentCompany) return <NoCompanyScreen logout={logout} />;
 
-  // ── 5. Rendu normal ───────────────────────────────────────────────
   const renderPage = () => {
     if (currentCompany.type === 'service') {
       switch (page) {
@@ -133,37 +124,20 @@ function AppContent() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--font)', color: 'var(--text)' }}>
+    <div style={{ minHeight:'100vh', background:'var(--bg)', fontFamily:'var(--font)', color:'var(--text)' }}>
       <ToastContainer toasts={toasts} onClose={hideToast} />
-
-      <Header
-        logoUrl={logoUrl}
-        setLogoUrl={setLogoUrl}
-        onLogout={logout}
-        currentCompany={currentCompany}
-        companies={companies}
-      />
-
-      <div style={{ display: 'flex', minHeight: `calc(100vh - var(--header-h))` }}>
+      <Header logoUrl={logoUrl} setLogoUrl={setLogoUrl} onLogout={logout} currentCompany={currentCompany} companies={companies} />
+      <div style={{ display:'flex', minHeight:`calc(100vh - var(--header-h))` }}>
         {!isMobile && <Sidebar page={page} onNavigate={nav} enCours={enCours} />}
-        <main
-          className={isMobile ? 'mobile-main' : ''}
-          style={!isMobile ? { flex: 1, padding: 16, overflowY: 'auto', paddingBottom: 32 } : {}}
-        >
-          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            {renderPage()}
-          </div>
+        <main className={isMobile ? 'mobile-main' : ''} style={!isMobile ? { flex:1, padding:16, overflowY:'auto', paddingBottom:32 } : {}}>
+          <div style={{ maxWidth:1200, margin:'0 auto' }}>{renderPage()}</div>
         </main>
       </div>
-
-      {isMobile && (
-        <BottomNav page={page} onNavigate={nav} enCours={enCours} currentCompany={currentCompany} />
-      )}
+      {isMobile && <BottomNav page={page} onNavigate={nav} enCours={enCours} currentCompany={currentCompany} />}
     </div>
   );
 }
 
-// ─── Racine ───────────────────────────────────────────────────────────
 export default function App() {
   return (
     <ThemeProvider>
