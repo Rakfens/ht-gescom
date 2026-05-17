@@ -1,4 +1,4 @@
-// useAgents.js — v2 : fix loading infini + setLoading(true) au rechargement
+// useAgents.js — v2 : fix loading infini + initialized guard
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchAgents, addAgent, updateAgent, deleteAgent } from '../../livraison/services/agentService';
 import { useCompany } from '../context/CompanyContext';
@@ -7,17 +7,11 @@ export const useAgents = () => {
   const [agents, setAgents]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-
   const { currentCompany, initialized } = useCompany();
   const lastCompanyId = useRef(null);
 
   const loadAgents = useCallback(async (companyId) => {
-    if (!companyId) {
-      setAgents([]);
-      setLoading(false);
-      return;
-    }
-    // ← AJOUT : setLoading(true) à chaque rechargement
+    if (!companyId) { setAgents([]); setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -30,27 +24,20 @@ export const useAgents = () => {
     } finally {
       setLoading(false);
     }
-  }, []); // ← pas de dépendance, on passe companyId en paramètre
+  }, []);
 
   useEffect(() => {
-    // ← CORRIGÉ : attendre que CompanyContext soit initialisé
     if (!initialized) return;
-
     const id = currentCompany?.id || null;
-
-    // ← évite de recharger si même société
     if (id === lastCompanyId.current) return;
     lastCompanyId.current = id;
-
     loadAgents(id);
   }, [currentCompany?.id, initialized, loadAgents]);
 
-  // Realtime
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.table === 'agents' && currentCompany?.id) {
+      if (e.detail?.table === 'agents' && currentCompany?.id)
         loadAgents(currentCompany.id);
-      }
     };
     window.addEventListener('supabase_realtime', handler);
     return () => window.removeEventListener('supabase_realtime', handler);
