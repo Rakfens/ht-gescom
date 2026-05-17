@@ -1,4 +1,4 @@
-// useAuth.js — v3 : fix logout + session listener propre
+// useAuth.js — v4 : fix blocage démarrage + timeout + un seul point d'init
 import { useState, useEffect } from 'react';
 import { supabase, clearCurrentCompany } from '../../../supabaseClient';
 
@@ -8,19 +8,41 @@ export const useAuth = () => {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    // 1. Lire la session actuelle
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
+    let ignore = false;
+
+    // ── Timeout de sécurité : 10s max pour vérifier la session ──────
+    // Si Supabase ne répond pas (réseau coupé, token corrompu),
+    // on sort du loading au lieu de rester bloqué indéfiniment
+    const safetyTimeout = setTimeout(() => {
+      if (!ignore) {
+        console.warn('[useAuth] Timeout session — forçage sortie loading');
+        setSession(null);
+        setLoading(false);
+      }
+    }, 10000);
+
+    // ── CORRIGÉ : onAuthStateChange UNIQUEMENT comme point d'init ───
+    // Il émet INITIAL_SESSION au premier appel — remplace getSession()
+    // Évite le double appel qui causait des race conditions
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (ignore) return;
+
+      if (event === 'INITIAL_SESSION' ||
+          event === 'SIGNED_IN'       ||
+          event === 'SIGNED_OUT'      ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED') {
+        clearTimeout(safetyTimeout); // ← annuler le timeout si réponse reçue
+        setSession(session ?? null);
+        setLoading(false);
+      }
     });
 
-    // 2. Écouter les changements (connexion / déconnexion / refresh)
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => { listener?.subscription?.unsubscribe?.(); };
+    return () => {
+      ignore = true;
+      clearTimeout(safetyTimeout);
+      listener?.subscription?.unsubscribe?.();
+    };
   }, []);
 
   const login = async (email, password) => {
@@ -32,21 +54,17 @@ export const useAuth = () => {
 
   const logout = async () => {
     try {
-      // 1. Nettoyer le store local AVANT signOut pour éviter les race conditions
       clearCurrentCompany();
-      // 2. Déconnexion Supabase
       await supabase.auth.signOut();
-      // 3. Forcer le state (onAuthStateChange le fera aussi, mais par sécurité)
       setSession(null);
     } catch (err) {
       console.error('logout error:', err);
-      // Forcer quand même la déconnexion visuelle
       setSession(null);
     }
   };
 
   return {
-    session: session === undefined ? null : session, // évite undefined pendant init
+    session: session === undefined ? null : session,
     loading: loading || session === undefined,
     login,
     logout,
