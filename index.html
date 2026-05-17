@@ -32,40 +32,6 @@
         min-height: 100vh;
       }
     </style>
-    <script>
-    // Watchdog : détecte si l'app s'est bloquée au dernier démarrage
-    (function () {
-      var BOOT_KEY = '__ht_gescom_boot__';
-      var BOOT_TIMEOUT = 12000; // 12 secondes
-      var last = parseInt(sessionStorage.getItem(BOOT_KEY) || '0');
-      var now = Date.now();
-
-     if (last && (now - last) < BOOT_TIMEOUT) {
-      // Démarrage précédent incomplet → nettoyage d'urgence
-      console.warn('[HT-GesCom] Démarrage précédent incomplet. Nettoyage...');
-      try { localStorage.clear(); } catch(e) {}
-      try { sessionStorage.clear(); } catch(e) {}
-      if ('caches' in window) {
-        caches.keys().then(function(keys) {
-          keys.forEach(function(k) { caches.delete(k); });
-        });
-      }
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-          regs.forEach(function(r) { r.unregister(); });
-        });
-      }
-      // Ne pas remettre la clé pour éviter une boucle infinie
-      return;
-    }
-
-    sessionStorage.setItem(BOOT_KEY, String(now));
-
-    window.addEventListener('load', function () {
-      sessionStorage.removeItem(BOOT_KEY); // succès → on efface le marqueur
-    });
-    })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

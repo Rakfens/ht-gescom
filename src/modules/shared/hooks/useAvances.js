@@ -1,47 +1,36 @@
-// useAvances.js — v2 : fix loading infini + initialized guard
-import { useState, useEffect, useCallback, useRef } from 'react';
+// useAvances.js — avec Realtime sync
+import { useState, useEffect, useCallback } from 'react';
 import { fetchAvances, addAvance, annulerAvance, deleteAvance } from '../../livraison/services/avanceService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useAvances = () => {
   const [avances, setAvances] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
-  const { currentCompany, initialized } = useCompany();
-  const lastCompanyId = useRef(null);
+  const [error, setError] = useState(null);
+  const { currentCompany } = useCompany();
 
-  const loadAvances = useCallback(async (companyId) => {
-    if (!companyId) { setAvances([]); setLoading(false); return; }
-    setLoading(true);
-    setError(null);
+  const loadAvances = useCallback(async () => {
+    if (!currentCompany?.id) { setAvances([]); setLoading(false); return; }
     try {
+      setError(null);
       const data = await fetchAvances();
       setAvances(data);
     } catch (err) {
-      console.error('useAvances:', err);
       setError(err.message);
-      setAvances([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
-  useEffect(() => {
-    if (!initialized) return;
-    const id = currentCompany?.id || null;
-    if (id === lastCompanyId.current) return;
-    lastCompanyId.current = id;
-    loadAvances(id);
-  }, [currentCompany?.id, initialized, loadAvances]);
+  useEffect(() => { loadAvances(); }, [loadAvances]);
 
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.table === 'avances' && currentCompany?.id)
-        loadAvances(currentCompany.id);
+      if (e.detail?.table === 'avances') loadAvances();
     };
     window.addEventListener('supabase_realtime', handler);
     return () => window.removeEventListener('supabase_realtime', handler);
-  }, [currentCompany?.id, loadAvances]);
+  }, [loadAvances]);
 
   const handleAddAvance = async (avance) => {
     try {
@@ -73,6 +62,6 @@ export const useAvances = () => {
     addAvance: handleAddAvance,
     annulerAvance: handleAnnulerAvance,
     deleteAvance: handleDeleteAvance,
-    reloadAvances: () => loadAvances(currentCompany?.id),
+    reloadAvances: loadAvances,
   };
 };

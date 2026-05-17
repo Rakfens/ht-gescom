@@ -1,46 +1,45 @@
-// useAuth.js — v4 : fix blocage démarrage + timeout + un seul point d'init
-import { useState, useEffect } from 'react';
+// useAuth.js — v4 : timeout anti-blocage + fix session expirée
+import { useState, useEffect, useRef } from 'react';
 import { supabase, clearCurrentCompany } from '../../../supabaseClient';
 
+const AUTH_TIMEOUT_MS = 6000; // 6s max pour résoudre l'auth
+
 export const useAuth = () => {
-  const [session, setSession] = useState(undefined); // undefined = pas encore vérifié
-  const [loading, setLoading] = useState(true);
+  const [session, setSession]     = useState(undefined);
+  const [loading, setLoading]     = useState(true);
   const [authError, setAuthError] = useState(null);
+  const timeoutRef = useRef(null);
+
+  const finishLoading = (sess) => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    setSession(sess ?? null);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    let ignore = false;
+    // ── Timeout de sécurité : si Supabase ne répond pas en 6s → on débloque ──
+    timeoutRef.current = setTimeout(() => {
+      // Session toujours undefined = Supabase bloqué → forcer null (Login)
+      setSession(prev => prev === undefined ? null : prev);
+      setLoading(false);
+    }, AUTH_TIMEOUT_MS);
 
-    // ── Timeout de sécurité : 10s max pour vérifier la session ──────
-    // Si Supabase ne répond pas (réseau coupé, token corrompu),
-    // on sort du loading au lieu de rester bloqué indéfiniment
-    const safetyTimeout = setTimeout(() => {
-      if (!ignore) {
-        console.warn('[useAuth] Timeout session — forçage sortie loading');
-        setSession(null);
-        setLoading(false);
-      }
-    }, 10000);
+    // ── Lire la session existante ──────────────────────────────────────
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) { finishLoading(null); return; }
+      finishLoading(session);
+    }).catch(() => finishLoading(null));
 
-    // ── CORRIGÉ : onAuthStateChange UNIQUEMENT comme point d'init ───
-    // Il émet INITIAL_SESSION au premier appel — remplace getSession()
-    // Évite le double appel qui causait des race conditions
+    // ── Écouter les changements (refresh token, signOut, etc.) ──────────
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (ignore) return;
-
-      if (event === 'INITIAL_SESSION' ||
-          event === 'SIGNED_IN'       ||
-          event === 'SIGNED_OUT'      ||
-          event === 'TOKEN_REFRESHED' ||
-          event === 'USER_UPDATED') {
-        clearTimeout(safetyTimeout); // ← annuler le timeout si réponse reçue
-        setSession(session ?? null);
-        setLoading(false);
-      }
+      // TOKEN_REFRESHED peut arriver après le timeout → mettre à jour quand même
+      setSession(session ?? null);
+      setLoading(false);
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     });
 
     return () => {
-      ignore = true;
-      clearTimeout(safetyTimeout);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       listener?.subscription?.unsubscribe?.();
     };
   }, []);
@@ -56,16 +55,15 @@ export const useAuth = () => {
     try {
       clearCurrentCompany();
       await supabase.auth.signOut();
-      setSession(null);
-    } catch (err) {
-      console.error('logout error:', err);
-      setSession(null);
-    }
+    } catch (_) {}
+    // Forcer dans tous les cas
+    setSession(null);
+    setLoading(false);
   };
 
   return {
-    session: session === undefined ? null : session,
-    loading: loading || session === undefined,
+    session:         session === undefined ? null : session,
+    loading:         loading || session === undefined,
     login,
     logout,
     authError,

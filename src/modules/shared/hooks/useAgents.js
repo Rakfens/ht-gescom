@@ -1,47 +1,38 @@
-// useAgents.js — v2 : fix loading infini + initialized guard
-import { useState, useEffect, useCallback, useRef } from 'react';
+// useAgents.js — avec Realtime sync
+import { useState, useEffect, useCallback } from 'react';
 import { fetchAgents, addAgent, updateAgent, deleteAgent } from '../../livraison/services/agentService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useAgents = () => {
-  const [agents, setAgents]   = useState([]);
+  const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(null);
-  const { currentCompany, initialized } = useCompany();
-  const lastCompanyId = useRef(null);
+  const [error, setError] = useState(null);
+  const { currentCompany } = useCompany();
 
-  const loadAgents = useCallback(async (companyId) => {
-    if (!companyId) { setAgents([]); setLoading(false); return; }
-    setLoading(true);
-    setError(null);
+  const loadAgents = useCallback(async () => {
+    if (!currentCompany?.id) { setAgents([]); setLoading(false); return; }
     try {
+      setError(null);
       const data = await fetchAgents();
       setAgents(data);
     } catch (err) {
       console.error('useAgents:', err);
       setError(err.message);
-      setAgents([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
-  useEffect(() => {
-    if (!initialized) return;
-    const id = currentCompany?.id || null;
-    if (id === lastCompanyId.current) return;
-    lastCompanyId.current = id;
-    loadAgents(id);
-  }, [currentCompany?.id, initialized, loadAgents]);
+  useEffect(() => { loadAgents(); }, [loadAgents]);
 
+  // 🔄 Realtime : recharger si changement sur 'agents'
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.table === 'agents' && currentCompany?.id)
-        loadAgents(currentCompany.id);
+      if (e.detail?.table === 'agents') loadAgents();
     };
     window.addEventListener('supabase_realtime', handler);
     return () => window.removeEventListener('supabase_realtime', handler);
-  }, [currentCompany?.id, loadAgents]);
+  }, [loadAgents]);
 
   const handleAddAgent = async (nom, salaire) => {
     try {
@@ -73,6 +64,6 @@ export const useAgents = () => {
     addAgent: handleAddAgent,
     updateAgent: handleUpdateAgent,
     deleteAgent: handleDeleteAgent,
-    reloadAgents: () => loadAgents(currentCompany?.id),
+    reloadAgents: loadAgents,
   };
 };

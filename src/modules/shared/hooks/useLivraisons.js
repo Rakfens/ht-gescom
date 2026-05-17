@@ -1,47 +1,38 @@
-// useLivraisons.js — v2 : fix loading infini + initialized guard
-import { useState, useEffect, useCallback, useRef } from 'react';
+// useLivraisons.js — avec Realtime sync
+import { useState, useEffect, useCallback } from 'react';
 import { fetchLivraisons, addLivraison, updateLivraison, deleteLivraison } from '../../livraison/services/livraisonService';
 import { useCompany } from '../context/CompanyContext';
 
 export const useLivraisons = () => {
   const [livraisons, setLivraisons] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const { currentCompany, initialized } = useCompany();
-  const lastCompanyId = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { currentCompany } = useCompany();
 
-  const loadLivraisons = useCallback(async (companyId) => {
-    if (!companyId) { setLivraisons([]); setLoading(false); return; }
-    setLoading(true);
-    setError(null);
+  const loadLivraisons = useCallback(async () => {
+    if (!currentCompany?.id) { setLivraisons([]); setLoading(false); return; }
     try {
+      setError(null);
       const data = await fetchLivraisons();
       setLivraisons(data);
     } catch (err) {
       console.error('useLivraisons:', err);
       setError(err.message);
-      setLivraisons([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
-  useEffect(() => {
-    if (!initialized) return;
-    const id = currentCompany?.id || null;
-    if (id === lastCompanyId.current) return;
-    lastCompanyId.current = id;
-    loadLivraisons(id);
-  }, [currentCompany?.id, initialized, loadLivraisons]);
+  useEffect(() => { loadLivraisons(); }, [loadLivraisons]);
 
+  // 🔄 Realtime
   useEffect(() => {
     const handler = (e) => {
-      if (e.detail?.table === 'livraisons' && currentCompany?.id)
-        loadLivraisons(currentCompany.id);
+      if (e.detail?.table === 'livraisons') loadLivraisons();
     };
     window.addEventListener('supabase_realtime', handler);
     return () => window.removeEventListener('supabase_realtime', handler);
-  }, [currentCompany?.id, loadLivraisons]);
+  }, [loadLivraisons]);
 
   const handleAddLivraison = async (livraison) => {
     if (!currentCompany?.id) throw new Error('Aucune société sélectionnée');
@@ -90,6 +81,6 @@ export const useLivraisons = () => {
     addLivraison: handleAddLivraison,
     updateLivraison: handleUpdateLivraison,
     deleteLivraison: handleDeleteLivraison,
-    reloadLivraisons: () => loadLivraisons(currentCompany?.id),
+    reloadLivraisons: loadLivraisons,
   };
 };

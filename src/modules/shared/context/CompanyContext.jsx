@@ -1,51 +1,53 @@
-// CompanyContext.jsx — v6 : fix "Chargement des données..." bloqué
-// Compatible tous appareils (iPad, Android, PC)
+// CompanyContext.jsx — v5 : timeout anti-blocage + fix réouverture
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { supabase, setCurrentCompany, clearCurrentCompany } from '../../../supabaseClient';
 
 const CompanyContext = createContext();
+const COMPANY_TIMEOUT_MS = 8000; // 8s max pour charger les sociétés
 
 export { setCurrentCompany };
 export const getCurrentCompany = () => {
-  try {
-    const s = localStorage.getItem('ht_gescom_company');
-    return s ? JSON.parse(s) : null;
-  } catch (_) { return null; }
+  try { const s = localStorage.getItem('ht_gescom_company'); return s ? JSON.parse(s) : null; }
+  catch (_) { return null; }
 };
 
 export function CompanyProvider({ children }) {
   const [currentCompany, setCurrentCompanyState] = useState(null);
-  const [companies, setCompanies]     = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [initialized, setInitialized] = useState(false);
+  const [companies,      setCompanies]            = useState([]);
+  const [loading,        setLoading]              = useState(true);
+  const [initialized,    setInitialized]          = useState(false);
   const realtimeChannels = useRef([]);
   const isMounted        = useRef(true);
-  const fetchInProgress  = useRef(false);
-  const lastUserId       = useRef(null); // ← anti-doublon par userId
+  const timeoutRef       = useRef(null);
+  const fetchingRef      = useRef(false); // évite les doubles appels
 
-  // ─── Reset ────────────────────────────────────────────────────────
-  const _resetState = () => {
-    clearCurrentCompany();
-    lastUserId.current = null;
+  // ─── Terminer le chargement (avec ou sans résultat) ───────────────
+  const finishLoading = () => {
     if (!isMounted.current) return;
-    setCompanies([]);
-    setCurrentCompanyState(null);
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
     setLoading(false);
     setInitialized(true);
-    realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
-    realtimeChannels.current = [];
+    fetchingRef.current = false;
   };
 
-  // ─── Charger les sociétés ─────────────────────────────────────────
+  // ─── Charger les sociétés ──────────────────────────────────────────
   const fetchUserCompanies = async (userId) => {
     if (!userId) { _resetState(); return []; }
+    if (fetchingRef.current) return []; // déjà en cours
+    fetchingRef.current = true;
 
-    // Évite les doubles appels pour le même utilisateur
-    if (fetchInProgress.current) return [];
-    if (lastUserId.current === userId && initialized) return [];
-
-    fetchInProgress.current = true;
-    lastUserId.current = userId;
+    // Timeout de sécurité
+    timeoutRef.current = setTimeout(() => {
+      if (!isMounted.current) return;
+      // Timeout → utiliser le localStorage comme fallback
+      const saved = getCurrentCompany();
+      if (saved) {
+        setCurrentCompany(saved);
+        setCurrentCompanyState(saved);
+        setCompanies([saved]);
+      }
+      finishLoading();
+    }, COMPANY_TIMEOUT_MS);
 
     try {
       const { data, error } = await supabase
@@ -56,106 +58,94 @@ export function CompanyProvider({ children }) {
       if (error) throw error;
 
       const list = data?.map(uc => uc.company).filter(Boolean) || [];
-      if (!isMounted.current) return list;
 
+      if (!isMounted.current) return list;
       setCompanies(list);
 
+      // Choisir la société active : priorité au localStorage (dernière utilisée)
       let active = null;
       try {
         const saved = JSON.parse(localStorage.getItem('ht_gescom_company') || 'null');
-        active = saved && list.find(c => c.id === saved.id) ? saved : (list[0] || null);
-      } catch (_) {
-        active = list[0] || null;
-      }
+        active = (saved && list.find(c => c.id === saved.id)) ? saved : (list[0] || null);
+      } catch (_) { active = list[0] || null; }
 
       setCurrentCompany(active);
       setCurrentCompanyState(active);
-      if (active?.id) setupRealtime(active.id);
-      return list;
+      setupRealtime(active?.id);
 
+      return list;
     } catch (err) {
-      console.error('[CompanyContext] fetchUserCompanies:', err);
+      // Fallback localStorage en cas d'erreur réseau
+      const saved = getCurrentCompany();
+      if (saved && isMounted.current) {
+        setCurrentCompany(saved);
+        setCurrentCompanyState(saved);
+        setCompanies([saved]);
+      }
       return [];
     } finally {
-      fetchInProgress.current = false;
-      if (isMounted.current) {
-        setLoading(false);
-        setInitialized(true);
-      }
+      finishLoading();
     }
   };
 
-  // ─── Realtime ─────────────────────────────────────────────────────
+  const _resetState = () => {
+    clearCurrentCompany();
+    if (!isMounted.current) return;
+    setCompanies([]);
+    setCurrentCompanyState(null);
+    realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
+    realtimeChannels.current = [];
+    finishLoading();
+  };
+
+  // ─── Realtime ──────────────────────────────────────────────────────
   const setupRealtime = (companyId) => {
     realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
     realtimeChannels.current = [];
     if (!companyId) return;
 
-    const tables = ['livraisons', 'agents', 'avances', 'recuperations',
-                    'ventes', 'achats', 'produits', 'mouvements_stock'];
+    const tables = ['livraisons', 'agents', 'avances', 'recuperations', 'ventes', 'achats', 'produits'];
     tables.forEach(table => {
-      const ch = supabase
-        .channel(`realtime_${table}_${companyId}`)
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table,
-          filter: `company_id=eq.${companyId}`,
-        }, (payload) => {
-          window.dispatchEvent(new CustomEvent('supabase_realtime', {
-            detail: { table, event: payload.eventType, payload }
-          }));
-        })
-        .subscribe();
-      realtimeChannels.current.push(ch);
+      try {
+        const ch = supabase
+          .channel(`rt_${table}_${companyId}_${Date.now()}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table, filter: `company_id=eq.${companyId}` },
+            (payload) => window.dispatchEvent(new CustomEvent('supabase_realtime', { detail: { table, event: payload.eventType, payload } }))
+          ).subscribe();
+        realtimeChannels.current.push(ch);
+      } catch (_) {}
     });
   };
 
-  // ─── Init ─────────────────────────────────────────────────────────
+  // ─── Auth listener ─────────────────────────────────────────────────
   useEffect(() => {
     isMounted.current = true;
 
-    // Timeout de sécurité : 12s max, tous appareils confondus
-    const safetyTimeout = setTimeout(() => {
-      if (isMounted.current && loading) {
-        console.warn('[CompanyContext] Timeout — forçage sortie loading');
-        setLoading(false);
-        setInitialized(true);
-      }
-    }, 12000);
-
-    // ── ÉTAPE 1 : getSession() pour les appareils qui ne reçoivent
-    //             pas INITIAL_SESSION (iPad Safari, certains Android)
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const init = async () => {
+      // Lecture de la session SANS attendre le refresh token
+      const { data: { session } } = await supabase.auth.getSession();
       if (!isMounted.current) return;
       if (session?.user?.id) {
-        fetchUserCompanies(session.user.id).then(() => {
-          clearTimeout(safetyTimeout);
-        });
+        await fetchUserCompanies(session.user.id);
       } else {
-        // Pas de session → sortir du loading immédiatement
-        clearTimeout(safetyTimeout);
         _resetState();
       }
-    }).catch(() => {
-      // getSession() échoue → on laisse onAuthStateChange prendre le relais
-      console.warn('[CompanyContext] getSession() échoué, attente onAuthStateChange...');
-    });
+    };
 
-    // ── ÉTAPE 2 : onAuthStateChange pour les changements en cours de vie
-    //             (login, logout, refresh token)
+    init();
+
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted.current) return;
 
       if (event === 'SIGNED_OUT' || !session) {
-        clearTimeout(safetyTimeout);
         _resetState();
         return;
       }
 
-      // SIGNED_IN = nouvel appareil ou nouvelle connexion
-      // TOKEN_REFRESHED = token expiré et renouvelé
-      // On NE traite PAS INITIAL_SESSION ici pour éviter le doublon avec getSession()
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        clearTimeout(safetyTimeout);
+      // TOKEN_REFRESHED → pas besoin de recharger les companies
+      if (event === 'TOKEN_REFRESHED') return;
+
+      if (event === 'SIGNED_IN') {
         if (isMounted.current) setLoading(true);
         await fetchUserCompanies(session.user.id);
       }
@@ -163,13 +153,12 @@ export function CompanyProvider({ children }) {
 
     return () => {
       isMounted.current = false;
-      clearTimeout(safetyTimeout);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       listener?.subscription?.unsubscribe?.();
       realtimeChannels.current.forEach(ch => supabase.removeChannel(ch));
     };
-  }, []); // eslint-disable-line
+  }, []);
 
-  // ─── Changer de société ───────────────────────────────────────────
   const switchCompany = (company) => {
     setCurrentCompany(company);
     setCurrentCompanyState(company);
@@ -179,15 +168,11 @@ export function CompanyProvider({ children }) {
 
   const refreshCompanies = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    lastUserId.current = null; // force le rechargement
-    await fetchUserCompanies(session?.user?.id || null);
+    if (session?.user?.id) await fetchUserCompanies(session.user.id);
   };
 
   return (
-    <CompanyContext.Provider value={{
-      currentCompany, companies, loading,
-      initialized, switchCompany, refreshCompanies,
-    }}>
+    <CompanyContext.Provider value={{ currentCompany, companies, loading, initialized, switchCompany, refreshCompanies }}>
       {children}
     </CompanyContext.Provider>
   );
