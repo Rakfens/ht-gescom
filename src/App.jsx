@@ -1,37 +1,72 @@
-// App.jsx — v6 : loading découplé, jamais bloqué
+// App.jsx — v7 : logique d'affichage simple et fiable
 import { useState, useEffect } from 'react';
-import { ThemeProvider }                        from './modules/shared/context/ThemeContext';
-import { CompanyProvider, useCompany }          from './modules/shared/context/CompanyContext';
-import { AppProvider, useApp }                  from './modules/shared/context/AppContext';
-import { ToastContainer }                       from './modules/shared/components/common/Toast';
-import { Loader }                               from './modules/shared/components/common/Loader';
-import { Login }                                from './modules/shared/components/Auth/Login';
-import { Header }                               from './modules/shared/components/Layout/Header';
-import { Sidebar }                              from './modules/shared/components/Layout/Sidebar';
-import { BottomNav }                            from './modules/shared/components/Layout/BottomNav';
+import { ThemeProvider }                   from './modules/shared/context/ThemeContext';
+import { CompanyProvider }                 from './modules/shared/context/CompanyContext';
+import { AppProvider, useApp }             from './modules/shared/context/AppContext';
+import { ToastContainer }                  from './modules/shared/components/common/Toast';
+import { Loader }                          from './modules/shared/components/common/Loader';
+import { Login }                           from './modules/shared/components/Auth/Login';
+import { Header }                          from './modules/shared/components/Layout/Header';
+import { Sidebar }                         from './modules/shared/components/Layout/Sidebar';
+import { BottomNav }                       from './modules/shared/components/Layout/BottomNav';
 
 // Modules livraison
-import { Dashboard as ServiceDashboard }        from './modules/livraison/pages/Dashboard';
-import { LivraisonForm }                        from './modules/livraison/components/LivraisonForm';
-import { Historique }                           from './modules/livraison/pages/Historique';
-import { Gerant }                               from './modules/livraison/pages/Gerant';
-import { Recap }                                from './modules/livraison/pages/Recap';
-import { Agents }                               from './modules/livraison/pages/Agents';
-import { Recuperation }                         from './modules/livraison/pages/Recuperation';
-import Depenses                                 from './modules/commerce/pages/Depenses';
+import { Dashboard as ServiceDashboard }   from './modules/livraison/pages/Dashboard';
+import { LivraisonForm }                   from './modules/livraison/components/LivraisonForm';
+import { Historique }                      from './modules/livraison/pages/Historique';
+import { Gerant }                          from './modules/livraison/pages/Gerant';
+import { Recap }                           from './modules/livraison/pages/Recap';
+import { Agents }                          from './modules/livraison/pages/Agents';
+import { Recuperation }                    from './modules/livraison/pages/Recuperation';
+import Depenses                            from './modules/commerce/pages/Depenses';
 
 // Modules commerce
-import CommerceDashboard                        from './modules/commerce/pages/Dashboard';
-import Ventes                                   from './modules/commerce/pages/Ventes';
-import Achats                                   from './modules/commerce/pages/Achats';
-import Stock                                    from './modules/commerce/pages/Stock';
-import Inventaire                               from './modules/commerce/pages/Inventaire';
-import Rapports                                 from './modules/commerce/pages/Rapports';
+import CommerceDashboard                   from './modules/commerce/pages/Dashboard';
+import Ventes                              from './modules/commerce/pages/Ventes';
+import Achats                              from './modules/commerce/pages/Achats';
+import Stock                               from './modules/commerce/pages/Stock';
+import Inventaire                          from './modules/commerce/pages/Inventaire';
+import Rapports                            from './modules/commerce/pages/Rapports';
+
+// ─── Écran "aucune société" ───────────────────────────────────────────
+function NoCompanyScreen({ logout }) {
+  return (
+    <div style={{
+      minHeight: '100vh', background: 'var(--bg)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      gap: 16, padding: 24,
+    }}>
+      <div style={{ fontSize: 52 }}>🏢</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', textAlign: 'center' }}>
+        Aucune société assignée
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
+        Contactez votre administrateur pour être assigné à une société.
+      </div>
+      {/* Bouton TOUJOURS cliquable — pas de loading overlay par-dessus */}
+      <button
+        onClick={logout}
+        style={{
+          marginTop: 12, padding: '13px 28px',
+          background: 'var(--red-dim)', color: 'var(--red)',
+          border: '1px solid rgba(248,113,113,0.3)',
+          borderRadius: 13, cursor: 'pointer',
+          fontWeight: 700, fontSize: 14,
+          fontFamily: 'var(--font)',
+        }}
+      >
+        Se déconnecter
+      </button>
+    </div>
+  );
+}
 
 // ─── Contenu principal ────────────────────────────────────────────────
 function AppContent() {
   const {
-    session, authLoading, dataLoading, logout,
+    user, authLoading, companyLoading, logout,
+    currentCompany, companies,
     agents, livraisons, avances, recuperations,
     addAgent, updateAgent, deleteAgent,
     addLivraison, updateLivraison, deleteLivraison,
@@ -40,59 +75,39 @@ function AppContent() {
     toasts, hideToast, success,
   } = useApp();
 
-  const { currentCompany, companies, loading: companyLoading } = useCompany();
-
   const [page,     setPage]     = useState('dashboard');
-  const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [logoUrl,  setLogoUrl]  = useState(null);
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
   }, []);
 
-  const nav      = (p) => { setPage(p); setMenuOpen(false); };
-  const enCours  = livraisons?.filter(l => l.statut === 'en_cours').length || 0;
+  const nav     = p => setPage(p);
+  const enCours = livraisons?.filter(l => l.statut === 'en_cours').length || 0;
   const suggestions = {
     clients:   [...new Set(livraisons?.map(l => l.client_donneur).filter(Boolean) || [])],
     colisList: [...new Set(livraisons?.map(l => l.colis).filter(Boolean) || [])],
     lieux:     [...new Set(livraisons?.map(l => l.destinataire_lieu).filter(Boolean) || [])],
   };
 
-  // ── ÉTAPE 1 : Auth en cours → loader court (max 6s) ─────────────────
-  if (authLoading) {
-    return <Loader message="Démarrage..." />;
-  }
+  // ── 1. Auth en cours de résolution (max 4s) ──────────────────────
+  if (authLoading) return <Loader message="Démarrage..." timeout={4000} />;
 
-  // ── ÉTAPE 2 : Pas de session → Login (immédiat) ──────────────────────
-  if (!session) {
-    return <Login />;
-  }
+  // ── 2. Non connecté → Login ───────────────────────────────────────
+  if (!user) return <Login />;
 
-  // ── ÉTAPE 3 : Session OK, chargement société (max 8s) ───────────────
-  if (companyLoading) {
-    return <Loader message="Chargement des données..." />;
-  }
+  // ── 3. Connecté, sociétés en cours de chargement ─────────────────
+  if (companyLoading) return <Loader message="Chargement..." timeout={8000} />;
 
-  // ── ÉTAPE 4 : Aucune société assignée ───────────────────────────────
-  if (!currentCompany && companies.length === 0) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', gap: 16, padding: 24 }}>
-        <div style={{ fontSize: 48 }}>🏢</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', textAlign: 'center' }}>Aucune société assignée</div>
-        <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Contactez votre administrateur.</div>
-        <button onClick={logout} style={{ marginTop: 8, padding: '11px 22px', background: 'var(--red-dim)', color: 'var(--red)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 12, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
-          Déconnexion
-        </button>
-      </div>
-    );
-  }
+  // ── 4. Connecté mais aucune société → écran dédié avec logout ────
+  if (!currentCompany) return <NoCompanyScreen logout={logout} />;
 
-  // ── ÉTAPE 5 : Rendu des pages ─────────────────────────────────────────
-  const renderContent = () => {
-    if (currentCompany?.type === 'service') {
+  // ── 5. Rendu normal ───────────────────────────────────────────────
+  const renderPage = () => {
+    if (currentCompany.type === 'service') {
       switch (page) {
         case 'dashboard':    return <ServiceDashboard agents={agents} livraisons={livraisons} commissionGerant={500} onNavigate={nav} />;
         case 'livraison':    return <LivraisonForm agents={agents} onAddLivraison={addLivraison} showToast={success} suggestions={suggestions} />;
@@ -121,13 +136,13 @@ function AppContent() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--font)', color: 'var(--text)' }}>
       <ToastContainer toasts={toasts} onClose={hideToast} />
 
-      <Header logoUrl={logoUrl} setLogoUrl={setLogoUrl} onLogout={logout} onMenuToggle={() => setMenuOpen(!menuOpen)} menuOpen={menuOpen} />
-
-      {menuOpen && !isMobile && (
-        <div style={{ position: 'fixed', top: 'var(--header-h)', left: 0, right: 0, background: 'var(--card)', borderBottom: '1px solid var(--border)', zIndex: 99 }}>
-          <Sidebar page={page} onNavigate={nav} enCours={enCours} />
-        </div>
-      )}
+      <Header
+        logoUrl={logoUrl}
+        setLogoUrl={setLogoUrl}
+        onLogout={logout}
+        currentCompany={currentCompany}
+        companies={companies}
+      />
 
       <div style={{ display: 'flex', minHeight: `calc(100vh - var(--header-h))` }}>
         {!isMobile && <Sidebar page={page} onNavigate={nav} enCours={enCours} />}
@@ -136,12 +151,14 @@ function AppContent() {
           style={!isMobile ? { flex: 1, padding: 16, overflowY: 'auto', paddingBottom: 32 } : {}}
         >
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            {renderContent()}
+            {renderPage()}
           </div>
         </main>
       </div>
 
-      {isMobile && <BottomNav page={page} onNavigate={nav} enCours={enCours} currentCompany={currentCompany} />}
+      {isMobile && (
+        <BottomNav page={page} onNavigate={nav} enCours={enCours} currentCompany={currentCompany} />
+      )}
     </div>
   );
 }

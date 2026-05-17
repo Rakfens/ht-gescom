@@ -1,4 +1,4 @@
-// AppContext.jsx — v5 : loading découplé (auth séparé de company/data)
+// AppContext.jsx — v6 : auth et company séparés, logout toujours cliquable
 import { createContext, useContext, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useAgents } from '../hooks/useAgents';
@@ -11,33 +11,35 @@ import { useCompany } from './CompanyContext';
 const AppContext = createContext(null);
 
 export const AppProvider = ({ children }) => {
-  const { session, loading: authLoading, login, logout } = useAuth();
+  // Auth — indépendant
+  const { user, loading: authLoading, login, logout, authError } = useAuth();
+
+  // Company — indépendant
   const { currentCompany, companies, loading: companyLoading, switchCompany } = useCompany();
+
+  // Données — chargées uniquement si connecté
+  const { agents,        loading: la, addAgent,        updateAgent,        deleteAgent,        reloadAgents        } = useAgents();
+  const { livraisons,    loading: ll, addLivraison,    updateLivraison,    deleteLivraison,    reloadLivraisons    } = useLivraisons();
+  const { avances,       loading: lv, addAvance,       annulerAvance,      deleteAvance,       reloadAvances       } = useAvances();
+  const { recuperations, loading: lr, addRecuperation, updateRecuperation, deleteRecuperation, reloadRecuperations } = useRecuperations();
+
+  // Toast
   const { toasts, showToast, hideToast, clearAll, success, error, warn, info } = useToast();
 
-  const { agents,       loading: agentsLoading,       addAgent,       updateAgent,       deleteAgent,       reloadAgents       } = useAgents();
-  const { livraisons,   loading: livraisonsLoading,   addLivraison,   updateLivraison,   deleteLivraison,   reloadLivraisons   } = useLivraisons();
-  const { avances,      loading: avancesLoading,      addAvance,      annulerAvance,     deleteAvance,      reloadAvances      } = useAvances();
-  const { recuperations,loading: recuperationsLoading,addRecuperation,updateRecuperation,deleteRecuperation,reloadRecuperations} = useRecuperations();
-
-  // ⚠️ IMPORTANT : authLoading est SÉPARÉ de dataLoading
-  // App.jsx décide quand afficher Login vs Loader vs contenu
-  const dataLoading = companyLoading || agentsLoading || livraisonsLoading || avancesLoading || recuperationsLoading;
-
   const value = useMemo(() => ({
-    // Auth
-    session, authLoading, dataLoading, login, logout,
-    // Company
+    // ─ Auth ─
+    user, authLoading, companyLoading, login, logout, authError,
+    // ─ Company ─
     currentCompany, companies, switchCompany,
-    // Données
-    agents,       addAgent,       updateAgent,       deleteAgent,       reloadAgents,
-    livraisons,   addLivraison,   updateLivraison,   deleteLivraison,   reloadLivraisons,
-    avances,      addAvance,      annulerAvance,     deleteAvance,      reloadAvances,
-    recuperations,addRecuperation,updateRecuperation,deleteRecuperation,reloadRecuperations,
-    // Toast
+    // ─ Données ─
+    agents,        addAgent,        updateAgent,        deleteAgent,        reloadAgents,
+    livraisons,    addLivraison,    updateLivraison,    deleteLivraison,    reloadLivraisons,
+    avances,       addAvance,       annulerAvance,      deleteAvance,       reloadAvances,
+    recuperations, addRecuperation, updateRecuperation, deleteRecuperation, reloadRecuperations,
+    // ─ Toast ─
     toasts, showToast, hideToast, clearAll, success, error, warn, info,
   }), [
-    session, authLoading, dataLoading, login, logout,
+    user, authLoading, companyLoading, login, logout, authError,
     currentCompany, companies, switchCompany,
     agents, addAgent, updateAgent, deleteAgent, reloadAgents,
     livraisons, addLivraison, updateLivraison, deleteLivraison, reloadLivraisons,
@@ -51,6 +53,6 @@ export const AppProvider = ({ children }) => {
 
 export const useApp = () => {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
+  if (!ctx) throw new Error('useApp doit être dans AppProvider');
   return ctx;
 };

@@ -1,46 +1,29 @@
-// useAuth.js — v4 : timeout anti-blocage + fix session expirée
+// useAuth.js — v5 : simple, fiable, zéro race condition
 import { useState, useEffect, useRef } from 'react';
 import { supabase, clearCurrentCompany } from '../../../supabaseClient';
 
-const AUTH_TIMEOUT_MS = 6000; // 6s max pour résoudre l'auth
-
 export const useAuth = () => {
-  const [session, setSession]     = useState(undefined);
-  const [loading, setLoading]     = useState(true);
+  const [user,      setUser]      = useState(undefined); // undefined = pas encore résolu
   const [authError, setAuthError] = useState(null);
-  const timeoutRef = useRef(null);
-
-  const finishLoading = (sess) => {
-    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-    setSession(sess ?? null);
-    setLoading(false);
-  };
+  const resolved = useRef(false);
 
   useEffect(() => {
-    // ── Timeout de sécurité : si Supabase ne répond pas en 6s → on débloque ──
-    timeoutRef.current = setTimeout(() => {
-      // Session toujours undefined = Supabase bloqué → forcer null (Login)
-      setSession(prev => prev === undefined ? null : prev);
-      setLoading(false);
-    }, AUTH_TIMEOUT_MS);
-
-    // ── Lire la session existante ──────────────────────────────────────
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) { finishLoading(null); return; }
-      finishLoading(session);
-    }).catch(() => finishLoading(null));
-
-    // ── Écouter les changements (refresh token, signOut, etc.) ──────────
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      // TOKEN_REFRESHED peut arriver après le timeout → mettre à jour quand même
-      setSession(session ?? null);
-      setLoading(false);
-      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    // onAuthStateChange est déclenché IMMÉDIATEMENT avec la session en cache
+    // C'est LA source de vérité — pas besoin de getSession() en plus
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      resolved.current = true;
     });
 
+    // Sécurité : si onAuthStateChange ne se déclenche pas dans 4s → null
+    const guard = setTimeout(() => {
+      if (!resolved.current) setUser(null);
+    }, 4000);
+
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      listener?.subscription?.unsubscribe?.();
+      clearTimeout(guard);
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -52,21 +35,18 @@ export const useAuth = () => {
   };
 
   const logout = async () => {
-    try {
-      clearCurrentCompany();
-      await supabase.auth.signOut();
-    } catch (_) {}
-    // Forcer dans tous les cas
-    setSession(null);
-    setLoading(false);
+    clearCurrentCompany();
+    // Forcer immédiatement AVANT signOut pour débloquer l'UI
+    setUser(null);
+    try { await supabase.auth.signOut(); } catch (_) {}
   };
 
   return {
-    session:         session === undefined ? null : session,
-    loading:         loading || session === undefined,
+    user,
+    loading:         user === undefined,
+    isAuthenticated: !!user,
     login,
     logout,
     authError,
-    isAuthenticated: !!session,
   };
 };
