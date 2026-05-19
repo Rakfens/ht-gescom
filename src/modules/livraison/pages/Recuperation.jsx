@@ -84,19 +84,19 @@ export const Recuperation = ({ agents, showToast }) => {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 18 }}>📦 Récupération matinale</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 18 }}>📦 Récupération matinale</h1>
       
       {/* Carte info */}
       <div style={{ background: 'linear-gradient(135deg, #1e1060, #0b1120)', border: '1px solid #a78bfa', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: '#a78bfa', fontWeight: 700, marginBottom: 4 }}>📅 Récupérations du {selectedDate}</div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: '#fff' }}>{formatAr(totalGains)}</div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>{totalRecuperations} récupération(s)</div>
+            <div style={{ fontSize: 12, color: 'var(--purple)', fontWeight: 700, marginBottom: 4 }}>📅 Récupérations du {selectedDate}</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--text)' }}>{formatAr(totalGains)}</div>
+            <div style={{ fontSize: 12, color: 'var(--subtle)' }}>{totalRecuperations} récupération(s)</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: '#64748b' }}>💰 Frais variable selon distance</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>✅ Non inclus dans le salaire mensuel</div>
+            <div style={{ fontSize: 11, color: 'var(--subtle)' }}>💰 Frais variable selon distance</div>
+            <div style={{ fontSize: 11, color: 'var(--subtle)' }}>✅ Non inclus dans le salaire mensuel</div>
           </div>
         </div>
       </div>
@@ -108,7 +108,7 @@ export const Recuperation = ({ agents, showToast }) => {
             <label style={lbl()}>📅 Date des récupérations</label>
             <input type="date" style={inp()} value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
           </div>
-          <button style={{ ...btn(COLORS.blue, '#2563eb'), padding: '8px 20px' }} onClick={loadRecuperations}>Actualiser</button>
+          <button style={{ ...btn(COLORS.blue, 'var(--blue2)'), padding: '8px 20px' }} onClick={loadRecuperations}>Actualiser</button>
         </div>
       </div>
 
@@ -136,7 +136,7 @@ export const Recuperation = ({ agents, showToast }) => {
             <input type="number" style={inp()} placeholder="1000" value={form.frais_recuperation} onChange={e => setForm({ ...form, frais_recuperation: e.target.value })} />
           </div>
         </div>
-        <button style={{ ...btn(COLORS.green, '#059669'), width: '100%', padding: '10px', marginTop: 12 }} onClick={handleAdd}>+ Ajouter la récupération</button>
+        <button style={{ ...btn(COLORS.green, 'var(--green)'), width: '100%', padding: '10px', marginTop: 12 }} onClick={handleAdd}>+ Ajouter la récupération</button>
       </div>
 
       {/* Liste des récupérations du jour */}
@@ -151,9 +151,9 @@ export const Recuperation = ({ agents, showToast }) => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {Object.values(recuperationsParLivreur).map(rl => (
             <div key={rl.livreur} style={{ background: COLORS.card, border: '1px solid ' + COLORS.border, borderRadius: 12, overflow: 'hidden' }}>
-              <div style={{ background: '#1e3a5f', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div><span style={{ fontWeight: 700, color: '#fff' }}>👨‍💼 {rl.livreur}</span></div>
-                <div><span style={{ color: '#34d399' }}>💰 {formatAr(rl.totalGain)}</span></div>
+              <div style={{ background: 'var(--blue-dim)', padding: '10px 15px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div><span style={{ fontWeight: 700, color: 'var(--text)' }}>👨‍💼 {rl.livreur}</span></div>
+                <div><span style={{ color: 'var(--green)' }}>💰 {formatAr(rl.totalGain)}</span></div>
               </div>
               <div style={{ padding: '10px' }}>
                 {rl.recuperations.map(r => (
@@ -162,8 +162,8 @@ export const Recuperation = ({ agents, showToast }) => {
                       <div style={{ display: 'flex', gap: 8, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                         <span style={{ minWidth: 150, fontWeight: 600 }}>🏪 {editData.client_donneur}</span>
                         <input type="number" style={{ ...inp(), width: 150 }} placeholder="Frais" value={editData.frais_recuperation} onChange={e => setEditData({ ...editData, frais_recuperation: e.target.value })} />
-                        <button style={{ ...btn(COLORS.green, '#047857'), padding: '6px 12px' }} onClick={handleUpdate}>✓</button>
-                        <button style={{ ...btn('#475569', '#334155'), padding: '6px 12px' }} onClick={() => setEditId(null)}>✕</button>
+                        <button style={{ ...btn(COLORS.green, 'var(--green2)'), padding: '6px 12px' }} onClick={handleUpdate}>✓</button>
+                        <button style={{ ...btn('var(--card2)', 'var(--card2)'), padding: '6px 12px' }} onClick={() => setEditId(null)}>✕</button>
                       </div>
                     ) : (
                       <>
@@ -172,8 +172,8 @@ export const Recuperation = ({ agents, showToast }) => {
                           <div style={{ fontSize: 11, color: COLORS.muted }}>💰 {formatAr(r.frais_recuperation)}</div>
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button style={{ background: '#1e3a5f', border: 'none', borderRadius: 6, padding: '5px 10px', color: '#60a5fa', fontSize: 11, cursor: 'pointer' }} onClick={() => { setEditId(r.id); setEditData({ client_donneur: r.client_donneur, frais_recuperation: r.frais_recuperation }); }}>✏️</button>
-                          <button style={{ background: '#450a0a', border: 'none', borderRadius: 6, padding: '5px 10px', color: '#f87171', fontSize: 11, cursor: 'pointer' }} onClick={() => handleDelete(r.id)}>🗑</button>
+                          <button style={{ background: 'var(--blue-dim)', border: 'none', borderRadius: 6, padding: '5px 10px', color: 'var(--blue)', fontSize: 11, cursor: 'pointer' }} onClick={() => { setEditId(r.id); setEditData({ client_donneur: r.client_donneur, frais_recuperation: r.frais_recuperation }); }}>✏️</button>
+                          <button style={{ background: 'var(--red-dim)', border: 'none', borderRadius: 6, padding: '5px 10px', color: 'var(--red)', fontSize: 11, cursor: 'pointer' }} onClick={() => handleDelete(r.id)}>🗑</button>
                         </div>
                       </>
                     )}

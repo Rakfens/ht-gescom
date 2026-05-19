@@ -5,7 +5,6 @@ export const fetchLivraisons = async () => {
   try {
     const company = getCurrentCompany();
     if (!company) {
-      console.warn('Aucune société sélectionnée pour fetchLivraisons');
       return [];
     }
 
@@ -17,10 +16,8 @@ export const fetchLivraisons = async () => {
       
     if (error) throw error;
     
-    console.log(`fetchLivraisons - ${company.name}: ${data?.length || 0} livraisons`);
     return data || [];
   } catch (error) {
-    console.error('fetchLivraisons - Erreur:', error);
     throw error;
   }
 };
@@ -54,7 +51,6 @@ export const addLivraison = async (livraison) => {
       created_at: new Date().toISOString()
     };
 
-    console.log('addLivraison - Insert data:', insertData);
 
     const { data, error } = await supabase
       .from('livraisons')
@@ -63,10 +59,8 @@ export const addLivraison = async (livraison) => {
       
     if (error) throw error;
     
-    console.log('addLivraison - Succès, ID:', data[0]?.id);
     return data[0];
   } catch (error) {
-    console.error('addLivraison - Erreur:', error);
     throw error;
   }
 };
@@ -76,7 +70,6 @@ export const updateLivraison = async (id, updates) => {
     const company = getCurrentCompany();
     if (!company) throw new Error('Aucune société sélectionnée');
 
-    console.log('updateLivraison - ID:', id, 'Updates:', updates);
 
     const { error } = await supabase
       .from('livraisons')
@@ -89,9 +82,7 @@ export const updateLivraison = async (id, updates) => {
       
     if (error) throw error;
     
-    console.log('updateLivraison - Succès');
   } catch (error) {
-    console.error('updateLivraison - Erreur:', error);
     throw error;
   }
 };
@@ -101,7 +92,6 @@ export const deleteLivraison = async (id) => {
     const company = getCurrentCompany();
     if (!company) throw new Error('Aucune société sélectionnée');
 
-    console.log('deleteLivraison - ID:', id);
 
     const { error } = await supabase
       .from('livraisons')
@@ -111,9 +101,7 @@ export const deleteLivraison = async (id) => {
       
     if (error) throw error;
     
-    console.log('deleteLivraison - Succès');
   } catch (error) {
-    console.error('deleteLivraison - Erreur:', error);
     throw error;
   }
 };

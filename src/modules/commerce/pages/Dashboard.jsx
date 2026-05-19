@@ -1,235 +1,181 @@
-// src/modules/commerce/pages/Dashboard.jsx
+// Dashboard.jsx — FIX #1 getCurrentCompany→useCompany + FIX #3 console.log supprimés
 import { useState, useEffect } from 'react';
 import { useCompany } from '../../shared/context/CompanyContext';
 import { fetchProduits, getAlertesStockBas, getValeurTotaleStock } from '../services/produitService';
-import { fetchVentes, getCA } from '../services/venteService';
-import { fetchAchats, getTotalAchats } from '../services/achatService';
-import { supabase, getCurrentCompany } from '../../../supabaseClient';
-import { COLORS, formatAr } from '../../shared/utils/constants';
+import { fetchVentes } from '../services/venteService';
+import { fetchAchats } from '../services/achatService';
+import { supabase } from '../../../supabaseClient';
+import { formatAr } from '../../shared/utils/constants';
+import { btn } from '../../shared/utils/helpers';
+import { CardSkeleton } from '../../shared/components/common/Loader';
+
+const today        = () => new Date().toISOString().split('T')[0];
+const firstOfMonth = () => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; };
+
+const StatCard = ({ title, value, icon, color }) => (
+  <div style={{ background:'var(--card)', border:`1px solid ${color}20`, borderRadius:14, padding:'14px 16px', borderTop:`2px solid ${color}` }}>
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+      <span style={{ fontSize:22 }}>{icon}</span>
+      <span style={{ fontSize:11, color:'var(--muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', textAlign:'right' }}>{title}</span>
+    </div>
+    <div style={{ fontSize:22, fontWeight:800, color }}>{value}</div>
+  </div>
+);
+
+const StatusBadge = ({ status }) => {
+  const cfg = {
+    paye:       { bg:'var(--green-dim)', color:'var(--green)',  label:'Payé' },
+    credit:     { bg:'var(--yellow-dim)',color:'var(--yellow)', label:'Crédit' },
+    en_attente: { bg:'var(--blue-dim)',  color:'var(--blue)',   label:'En attente' },
+    annule:     { bg:'var(--red-dim)',   color:'var(--red)',    label:'Annulé' },
+  };
+  const c = cfg[status] || cfg.en_attente;
+  return <span style={{ background:c.bg, color:c.color, padding:'3px 9px', borderRadius:20, fontSize:11, fontWeight:700 }}>{c.label}</span>;
+};
 
 export default function CommerceDashboard() {
+  // FIX #1 : useCompany() uniquement — plus de getCurrentCompany()
   const { currentCompany } = useCompany();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    ventesJour: 0,
-    ventesMois: 0,
-    caJour: 0,
-    caMois: 0,
-    nbProduits: 0,
-    stockBas: 0,
-    valeurStock: 0,
-    achatsMois: 0,
-    depensesJour: 0,
-    depensesMois: 0
-  });
+
+  const [loading,      setLoading]      = useState(true);
   const [recentVentes, setRecentVentes] = useState([]);
-  const [alertesStock, setAlertesStock] = useState([]);
+  const [alertes,      setAlertes]      = useState([]);
+  const [stats, setStats] = useState({
+    ventesJour:0, ventesMois:0, caJour:0, caMois:0,
+    nbProduits:0, stockBas:0, valeurStock:0, achatsMois:0,
+    depensesJour:0, depensesMois:0,
+  });
 
-  // Fonction pour obtenir la date au bon format YYYY-MM-DD
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
+  useEffect(() => { if (currentCompany) load(); }, [currentCompany]);
 
-  const getFirstDayOfMonth = () => {
-    const date = new Date();
-    date.setDate(1);
-    return date.toISOString().split('T')[0];
-  };
-
+  // Realtime
   useEffect(() => {
-    if (currentCompany) {
-      loadDashboardData();
-    }
+    const h = e => { if (['ventes','achats','produits','depenses'].includes(e.detail?.table)) load(); };
+    window.addEventListener('supabase_realtime', h);
+    return () => window.removeEventListener('supabase_realtime', h);
   }, [currentCompany]);
 
-  const loadDashboardData = async () => {
+  // FIX #3 : tous les console.log supprimés
+  const load = async () => {
+    if (!currentCompany) return;
     setLoading(true);
     try {
-      const today = getTodayDate();
-      const firstDayOfMonth = getFirstDayOfMonth();
+      const t  = today();
+      const fm = firstOfMonth();
 
-      console.log('📅 Aujourd\'hui:', today);
-      console.log('📅 Début du mois:', firstDayOfMonth);
+      // Requêtes en parallèle — FIX performance
+      const [toutesVentes, produits, alertesData, valeurStock, achats] = await Promise.all([
+        fetchVentes(),
+        fetchProduits(),
+        getAlertesStockBas(),
+        getValeurTotaleStock(),
+        fetchAchats({ dateDebut: fm, dateFin: t }),
+      ]);
 
-      // Charger toutes les ventes
-      const toutesVentes = await fetchVentes();
-      console.log('📊 Toutes les ventes:', toutesVentes.length);
+      const ventesJour  = toutesVentes.filter(v => (v.date_vente||'').split('T')[0] === t);
+      const ventesMois  = toutesVentes.filter(v => (v.date_vente||'').split('T')[0] >= fm);
+      const caJour  = ventesJour.reduce((s,v) => s + (v.montant_total||0), 0);
+      const caMois  = ventesMois.reduce((s,v) => s + (v.montant_total||0), 0);
+      const totalAchats = achats.reduce((s,a) => s + (a.montant_total||0), 0);
 
-      // Ventes du jour - Filtrer par date au bon format
-      const ventesJour = toutesVentes.filter(v => {
-        const dateVente = v.date_vente ? v.date_vente.split('T')[0] : null;
-        return dateVente === today;
-      });
-      
-      // Ventes du mois
-      const ventesMois = toutesVentes.filter(v => {
-        const dateVente = v.date_vente ? v.date_vente.split('T')[0] : null;
-        return dateVente >= firstDayOfMonth;
-      });
-
-      console.log('📊 Ventes aujourd\'hui:', ventesJour.length);
-      console.log('📊 Ventes du mois:', ventesMois.length);
-
-      // CA du jour et du mois
-      const caJour = ventesJour.reduce((sum, v) => sum + (v.montant_total || 0), 0);
-      const caMois = ventesMois.reduce((sum, v) => sum + (v.montant_total || 0), 0);
-
-      // Produits
-      const produits = await fetchProduits();
-      const alertes = await getAlertesStockBas();
-      const valeurStock = await getValeurTotaleStock();
-
-      // Achats du mois
-      const achats = await fetchAchats({ dateDebut: firstDayOfMonth, dateFin: today });
-      const totalAchats = achats.reduce((sum, a) => sum + (a.montant_total || 0), 0);
-
-      // Dépenses (uniquement pour Pomanay)
-      let depensesJour = 0;
-      let depensesMois = 0;
-      
+      let depensesJour = 0, depensesMois = 0;
       if (currentCompany.slug === 'pomanay') {
-        const company = getCurrentCompany();
-        // Dépenses du jour
-        const { data: depensesJourData } = await supabase
-          .from('depenses')
-          .select('montant')
-          .eq('company_id', company?.id)
-          .eq('date_depense', today);
-        
-        depensesJour = depensesJourData?.reduce((sum, d) => sum + (d.montant || 0), 0) || 0;
-
-        // Dépenses du mois
-        const { data: depensesMoisData } = await supabase
-          .from('depenses')
-          .select('montant')
-          .eq('company_id', company?.id)
-          .gte('date_depense', firstDayOfMonth)
-          .lte('date_depense', today);
-        
-        depensesMois = depensesMoisData?.reduce((sum, d) => sum + (d.montant || 0), 0) || 0;
-        
-        console.log('💰 Dépenses aujourd\'hui:', depensesJour);
-        console.log('💰 Dépenses du mois:', depensesMois);
+        // FIX #1 : currentCompany.id directement (pas getCurrentCompany())
+        const [{ data: dj }, { data: dm }] = await Promise.all([
+          supabase.from('depenses').select('montant').eq('company_id', currentCompany.id).eq('date_depense', t),
+          supabase.from('depenses').select('montant').eq('company_id', currentCompany.id).gte('date_depense', fm).lte('date_depense', t),
+        ]);
+        depensesJour = (dj||[]).reduce((s,d) => s+(d.montant||0), 0);
+        depensesMois = (dm||[]).reduce((s,d) => s+(d.montant||0), 0);
       }
 
-      setStats({
-        ventesJour: ventesJour.length,
-        ventesMois: ventesMois.length,
-        caJour: caJour,
-        caMois: caMois,
-        nbProduits: produits.length,
-        stockBas: alertes.length,
-        valeurStock: valeurStock,
-        achatsMois: totalAchats,
-        depensesJour: depensesJour,
-        depensesMois: depensesMois
-      });
-
-      setRecentVentes(toutesVentes.slice(0, 5));
-      setAlertesStock(alertes.slice(0, 5));
-    } catch (error) {
-      console.error('Erreur chargement dashboard:', error);
-    } finally {
-      setLoading(false);
-    }
+      setStats({ ventesJour:ventesJour.length, ventesMois:ventesMois.length, caJour, caMois, nbProduits:produits.length, stockBas:alertesData.length, valeurStock, achatsMois:totalAchats, depensesJour, depensesMois });
+      setRecentVentes(toutesVentes.slice(0,5));
+      setAlertes(alertesData.slice(0,5));
+    } catch (_) {}
+    finally { setLoading(false); }
   };
 
-  if (loading) {
-    return <div style={{ color: COLORS.muted, textAlign: 'center', padding: 50 }}>Chargement...</div>;
-  }
+  if (loading) return (
+    <div style={{ padding:'0 0 20px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:12, marginBottom:20 }}>
+        {Array(6).fill(0).map((_,i) => <CardSkeleton key={i} />)}
+      </div>
+    </div>
+  );
+
+  const benefice = stats.caMois - stats.achatsMois - stats.depensesMois;
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
-        Dashboard {currentCompany?.name}
-      </h1>
-      <p style={{ color: COLORS.muted, marginBottom: 24 }}>Aperçu de votre activité</p>
-
-      {/* Cartes statistiques */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <StatCard title="Ventes aujourd'hui" value={stats.ventesJour} icon="📦" color={COLORS.blue} />
-        <StatCard title="CA aujourd'hui" value={formatAr(stats.caJour)} icon="💰" color={COLORS.green} />
-        <StatCard title="Ventes du mois" value={stats.ventesMois} icon="📊" color={COLORS.purple} />
-        <StatCard title="CA du mois" value={formatAr(stats.caMois)} icon="💵" color={COLORS.green} />
-        <StatCard title="Produits" value={stats.nbProduits} icon="🏷️" color={COLORS.orange} />
-        <StatCard title="Valeur stock" value={formatAr(stats.valeurStock)} icon="📦" color={COLORS.blue} />
-        <StatCard title="Alertes stock" value={stats.stockBas} icon="⚠️" color={COLORS.red} />
-        <StatCard title="Achats du mois" value={formatAr(stats.achatsMois)} icon="📥" color={COLORS.pink} />
-        
-        {/* Dépenses (uniquement pour Pomanay) */}
-        {currentCompany?.slug === 'pomanay' && (
-          <>
-            <StatCard title="Dépenses aujourd'hui" value={formatAr(stats.depensesJour)} icon="💸" color={COLORS.red} />
-            <StatCard title="Dépenses du mois" value={formatAr(stats.depensesMois)} icon="📉" color={COLORS.orange} />
-          </>
-        )}
+    <div style={{ padding:'0 0 24px' }}>
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontSize:20, fontWeight:800, color:'var(--text)' }}>Dashboard</h1>
+        <p style={{ color:'var(--muted)', fontSize:12, marginTop:2 }}>{currentCompany?.name} · Aperçu de l'activité</p>
       </div>
 
-      {/* Bénéfice net (uniquement pour Pomanay) */}
+      {/* Stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))', gap:10, marginBottom:16 }}>
+        <StatCard title="Ventes aujourd'hui" value={stats.ventesJour}           icon="📦" color="var(--blue)"   />
+        <StatCard title="CA aujourd'hui"      value={formatAr(stats.caJour)}     icon="💰" color="var(--green)"  />
+        <StatCard title="Ventes du mois"      value={stats.ventesMois}           icon="📊" color="var(--purple)" />
+        <StatCard title="CA du mois"          value={formatAr(stats.caMois)}     icon="💵" color="var(--green)"  />
+        <StatCard title="Produits"            value={stats.nbProduits}           icon="🏷️" color="var(--teal)"   />
+        <StatCard title="Valeur stock"        value={formatAr(stats.valeurStock)} icon="📦" color="var(--blue)"  />
+        <StatCard title="Alertes stock"       value={stats.stockBas}             icon="⚠️" color={stats.stockBas>0?'var(--red)':'var(--green)'} />
+        <StatCard title="Achats du mois"      value={formatAr(stats.achatsMois)} icon="📥" color="var(--orange)" />
+        {currentCompany?.slug === 'pomanay' && <>
+          <StatCard title="Dépenses aujourd'hui" value={formatAr(stats.depensesJour)} icon="💸" color="var(--red)"    />
+          <StatCard title="Dépenses du mois"     value={formatAr(stats.depensesMois)} icon="📉" color="var(--orange)" />
+        </>}
+      </div>
+
+      {/* Bénéfice net */}
       {currentCompany?.slug === 'pomanay' && (
-        <div style={{ 
-          background: 'linear-gradient(135deg, #1e3a5f, #0f172a)', 
-          borderRadius: 12, 
-          padding: 20, 
-          marginBottom: 24,
-          border: `1px solid ${COLORS.border2}`
-        }}>
-          <div style={{ fontSize: 14, color: COLORS.muted, marginBottom: 8 }}>📈 Bénéfice net</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: COLORS.green }}>
-            {formatAr(stats.caMois - stats.achatsMois - stats.depensesMois)}
-          </div>
-          <div style={{ fontSize: 12, color: COLORS.muted, marginTop: 8 }}>
-            CA - Achats - Dépenses = {formatAr(stats.caMois)} - {formatAr(stats.achatsMois)} - {formatAr(stats.depensesMois)}
-          </div>
+        <div style={{ background:`linear-gradient(135deg, ${benefice>=0?'rgba(52,211,153,0.08)':'rgba(248,113,113,0.08)'}, var(--card))`, border:`1px solid ${benefice>=0?'var(--green)':'var(--red)'}30`, borderRadius:16, padding:'18px 20px', marginBottom:16 }}>
+          <div style={{ fontSize:11, color:'var(--muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>📈 Bénéfice net du mois</div>
+          <div style={{ fontSize:30, fontWeight:800, color:benefice>=0?'var(--green)':'var(--red)' }}>{formatAr(benefice)}</div>
+          <div style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>CA {formatAr(stats.caMois)} − Achats {formatAr(stats.achatsMois)} − Dépenses {formatAr(stats.depensesMois)}</div>
         </div>
       )}
 
       {/* Alertes stock */}
-      {alertesStock.length > 0 && (
-        <div style={{ background: '#451a03', border: '1px solid #f59e0b', borderRadius: 12, padding: 16, marginBottom: 24 }}>
-          <h3 style={{ color: '#f59e0b', marginBottom: 12, fontSize: 14, fontWeight: 700 }}>
-            ⚠️ Alertes stock bas ({alertesStock.length})
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {alertesStock.map(produit => (
-              <div key={produit.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                <span>{produit.nom}</span>
-                <span style={{ color: COLORS.orange }}>Stock: {produit.quantite_stock} / Min: {produit.stock_minimum}</span>
-              </div>
-            ))}
-          </div>
+      {alertes.length > 0 && (
+        <div style={{ background:'var(--yellow-dim)', border:'1px solid rgba(251,191,36,0.3)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <h3 style={{ color:'var(--yellow)', marginBottom:10, fontSize:13, fontWeight:700 }}>⚠️ Stock bas ({alertes.length})</h3>
+          {alertes.map(p => (
+            <div key={p.id} style={{ display:'flex', justifyContent:'space-between', fontSize:13, padding:'5px 0', borderBottom:'1px solid rgba(251,191,36,0.15)' }}>
+              <span style={{ color:'var(--text)' }}>{p.nom}</span>
+              <span style={{ color:'var(--orange)', fontWeight:600 }}>{p.quantite_stock} / min {p.stock_minimum}</span>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Dernières ventes */}
-      <div style={{ background: COLORS.card, borderRadius: 12, border: `1px solid ${COLORS.border2}`, overflow: 'hidden' }}>
-        <div style={{ padding: 16, borderBottom: `1px solid ${COLORS.border2}` }}>
-          <h3 style={{ fontWeight: 700 }}>📋 Dernières ventes</h3>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ background:'var(--card)', borderRadius:14, border:'1px solid var(--border2)', overflow:'hidden' }}>
+        <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--border2)', fontWeight:700, fontSize:14 }}>📋 Dernières ventes</div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
-              <tr style={{ background: COLORS.bg }}>
-                <th style={{ padding: 12, textAlign: 'left', fontSize: 12, color: COLORS.muted }}>#Facture</th>
-                <th style={{ padding: 12, textAlign: 'left', fontSize: 12, color: COLORS.muted }}>Client</th>
-                <th style={{ padding: 12, textAlign: 'left', fontSize: 12, color: COLORS.muted }}>Date</th>
-                <th style={{ padding: 12, textAlign: 'right', fontSize: 12, color: COLORS.muted }}>Montant</th>
-                <th style={{ padding: 12, textAlign: 'center', fontSize: 12, color: COLORS.muted }}>Statut</th>
+              <tr style={{ background:'var(--bg)', fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                {['Facture','Client','Date','Montant','Statut'].map(h => (
+                  <th key={h} style={{ padding:'9px 12px', textAlign:h==='Montant'?'right':h==='Statut'?'center':'left' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {recentVentes.map(vente => (
-                <tr key={vente.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                  <td style={{ padding: 12, fontSize: 13 }}>{vente.numero_facture}</td>
-                  <td style={{ padding: 12, fontSize: 13 }}>{vente.client_nom || '-'}</td>
-                  <td style={{ padding: 12, fontSize: 13 }}>{new Date(vente.date_vente).toLocaleDateString()}</td>
-                  <td style={{ padding: 12, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{formatAr(vente.montant_total)}</td>
-                  <td style={{ padding: 12, textAlign: 'center' }}>
-                    <StatusBadge status={vente.statut} />
-                  </td>
-                </tr>
-              ))}
+              {recentVentes.length === 0
+                ? <tr><td colSpan={5} style={{ padding:32, textAlign:'center', color:'var(--muted)' }}>Aucune vente</td></tr>
+                : recentVentes.map(v => (
+                  <tr key={v.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                    <td style={{ padding:'10px 12px', fontSize:13, fontWeight:600 }}>{v.numero_facture}</td>
+                    <td style={{ padding:'10px 12px', fontSize:13 }}>{v.client_nom || '—'}</td>
+                    <td style={{ padding:'10px 12px', fontSize:13 }}>{new Date(v.date_vente).toLocaleDateString('fr-FR')}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', fontSize:13, fontWeight:600, color:'var(--green)' }}>{formatAr(v.montant_total)}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'center' }}><StatusBadge status={v.statut} /></td>
+                  </tr>
+                ))
+              }
             </tbody>
           </table>
         </div>
@@ -237,24 +183,3 @@ export default function CommerceDashboard() {
     </div>
   );
 }
-
-const StatCard = ({ title, value, icon, color }) => (
-  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border2}`, borderRadius: 12, padding: 16 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <span style={{ fontSize: 24 }}>{icon}</span>
-      <span style={{ fontSize: 12, color: COLORS.muted }}>{title}</span>
-    </div>
-    <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
-  </div>
-);
-
-const StatusBadge = ({ status }) => {
-  const config = {
-    paye: { bg: '#064e3b', color: '#34d399', label: 'Payé' },
-    credit: { bg: '#451a03', color: '#fbbf24', label: 'Crédit' },
-    en_attente: { bg: '#1e3a5f', color: '#60a5fa', label: 'En attente' },
-    annule: { bg: '#450a0a', color: '#f87171', label: 'Annulé' }
-  };
-  const c = config[status] || config.en_attente;
-  return <span style={{ background: c.bg, color: c.color, padding: '4px 8px', borderRadius: 20, fontSize: 11 }}>{c.label}</span>;
-};

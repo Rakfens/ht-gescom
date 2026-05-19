@@ -5,7 +5,6 @@ export const fetchAvances = async () => {
   try {
     const company = getCurrentCompany();
     if (!company) {
-      console.warn('Aucune société sélectionnée pour fetchAvances');
       return [];
     }
 
@@ -18,7 +17,6 @@ export const fetchAvances = async () => {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('fetchAvances - Erreur:', error);
     throw error;
   }
 };
@@ -56,7 +54,6 @@ export const addAvance = async (avance) => {
     if (error) throw error;
     return data[0];
   } catch (error) {
-    console.error('addAvance - Erreur:', error);
     throw error;
   }
 };
@@ -74,7 +71,6 @@ export const annulerAvance = async (id) => {
       
     if (error) throw error;
   } catch (error) {
-    console.error('annulerAvance - Erreur:', error);
     throw error;
   }
 };
@@ -92,7 +88,6 @@ export const deleteAvance = async (id) => {
       
     if (error) throw error;
   } catch (error) {
-    console.error('deleteAvance - Erreur:', error);
     throw error;
   }
 };

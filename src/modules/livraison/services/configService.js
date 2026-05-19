@@ -6,7 +6,6 @@ export const fetchCommission = async () => {
   const company = getCurrentCompany();
   
   if (!company) {
-    console.warn('Aucune société sélectionnée');
     return 500; // Valeur par défaut
   }
   
@@ -21,7 +20,6 @@ export const fetchCommission = async () => {
     if (error && error.code !== 'PGRST116') throw error;
     return data ? Number(data.valeur) : 500;
   } catch (error) {
-    console.error('fetchCommission - Erreur:', error);
     return 500;
   }
 };
@@ -52,7 +50,6 @@ export const fetchLogo = async () => {
   const company = getCurrentCompany();
   
   if (!company) {
-    console.warn('Aucune société sélectionnée');
     return null;
   }
   
@@ -67,7 +64,6 @@ export const fetchLogo = async () => {
     if (error && error.code !== 'PGRST116') throw error;
     return data?.valeur || null;
   } catch (error) {
-    console.error('fetchLogo - Erreur:', error);
     return null;
   }
 };
@@ -140,7 +136,6 @@ export const fetchAllConfig = async () => {
     
     return configMap;
   } catch (error) {
-    console.error('fetchAllConfig - Erreur:', error);
     return {};
   }
 };
@@ -162,7 +157,6 @@ export const getConfigValue = async (key, defaultValue = null) => {
     if (error && error.code !== 'PGRST116') return defaultValue;
     return data?.valeur || defaultValue;
   } catch (error) {
-    console.error(`getConfigValue - Erreur pour ${key}:`, error);
     return defaultValue;
   }
 };

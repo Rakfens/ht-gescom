@@ -410,3 +410,26 @@ input[type=number]::-webkit-outer-spin-button { opacity: 0.5; }
 .mt-1{margin-top:4px}  .mt-2{margin-top:8px}  .mt-3{margin-top:12px} .mt-4{margin-top:16px} .mt-5{margin-top:20px}
 .mb-1{margin-bottom:4px}.mb-2{margin-bottom:8px}.mb-3{margin-bottom:12px}.mb-4{margin-bottom:16px}.mb-5{margin-bottom:20px}
 .p-1{padding:4px}.p-2{padding:8px}.p-3{padding:12px}.p-4{padding:16px}.p-5{padding:20px}
+
+/* ─── Feedback tactile mobile (scale au tap) ─── */
+@media (max-width: 768px) {
+  button:active, 
+  a:active,
+  [role="button"]:active {
+    transform: scale(0.96) !important;
+    opacity: 0.88 !important;
+    transition: transform 0.08s ease, opacity 0.08s ease !important;
+  }
+  
+  /* Sauf les overlays et les loaders */
+  .no-tap-scale:active {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Mode paysage iOS */
+@media (max-width: 900px) and (orientation: landscape) {
+  :root { --nav-h: 56px; --header-h: 50px; }
+  .mobile-main { padding: 10px 14px; padding-bottom: calc(var(--nav-h) + 12px); }
+}

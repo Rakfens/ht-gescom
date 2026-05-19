@@ -101,9 +101,15 @@ export default function Ventes() {
   const [searchProduit, setSearchProduit] = useState('');
 
   // FIX #1 : état pour les modaux (plus de confirm())
-  const [confirmDelete, setConfirmDelete] = useState(null);  // { id }
-  // FIX #5 : état pour la modal impression
-  const [printPending, setPrintPending] = useState(null);    // { venteId }
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [printPending,  setPrintPending]  = useState(null);
+  const [isMobile,      setIsMobile]      = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
 
   const [form, setForm] = useState({
     client_nom: '',
@@ -312,78 +318,117 @@ export default function Ventes() {
         </button>
       </div>
 
-      {/* Tableau ventes */}
-      <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border2)', overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg)', fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Facture</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Client</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Montant</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Payé</th>
-                {/* FIX #3 : colonne solde restant */}
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Solde</th>
-                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Statut</th>
-                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ventes.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 48, textAlign: 'center', color: 'var(--muted)' }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>💰</div>Aucune vente enregistrée
-                </td></tr>
-              ) : ventes.map(v => {
-                const solde = (v.reste_a_payer || 0);
-                return (
-                  <tr key={v.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, fontSize: 13 }}>{v.numero_facture}</td>
-                    <td style={{ padding: '10px 12px' }}>{v.client_nom || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>{new Date(v.date_vente).toLocaleDateString('fr-FR')}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{formatAr(v.montant_total)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatAr(v.montant_paye)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700,
-                      color: solde > 0 ? 'var(--orange)' : 'var(--green)' }}>
-                      {solde > 0 ? formatAr(solde) : '✓'}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}><StatusBadge status={v.statut} /></td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
-                        {/* FIX #5 : bouton impression branché */}
-                        <button onClick={() => handlePrintTicket(v.id)}
-                          style={{ ...btn('var(--card2)', 'var(--card2)'), padding: '5px 9px', fontSize: 13, border: '1px solid var(--border2)', color: 'var(--muted)' }}
-                          title="Imprimer ticket">🖨️</button>
-                        <button onClick={() => handleEditVente(v)}
-                          style={{ ...btn('var(--card2)', 'var(--card2)'), padding: '5px 9px', fontSize: 13, border: '1px solid var(--border2)', color: 'var(--muted)' }}
-                          title="Modifier">✏️</button>
-                        <button onClick={() => handleDeleteVente(v.id)}
-                          style={{ ...btn('var(--red-dim)', 'var(--red-dim)'), padding: '5px 9px', fontSize: 13, color: 'var(--red)', border: '1px solid rgba(248,113,113,0.2)' }}
-                          title="Supprimer">🗑️</button>
+      {/* Mobile : cards / Desktop : tableau */}
+      {isMobile ? (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {ventes.length === 0
+            ? <div style={{ textAlign:'center', color:'var(--muted)', padding:48 }}><div style={{ fontSize:28, marginBottom:8 }}>💰</div>Aucune vente</div>
+            : ventes.map(v => {
+              const solde = v.reste_a_payer || 0;
+              return (
+                <div key={v.id} style={{ background:'var(--card)', border:'1px solid var(--border2)', borderRadius:16, padding:16, animation:'fadeUp 0.3s ease both' }}>
+                  {/* Ligne 1 : facture + statut */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:14, color:'var(--text)' }}>{v.numero_facture}</div>
+                      <div style={{ fontSize:12, color:'var(--muted)', marginTop:2 }}>
+                        {v.client_nom || '—'} · {new Date(v.date_vente).toLocaleDateString('fr-FR')}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: 'var(--bg)', borderTop: '2px solid var(--border2)' }}>
-                <td colSpan={3} style={{ padding: '10px 12px', fontWeight: 700, fontSize: 13 }}>TOTAL GÉNÉRAL</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, fontSize: 15, color: 'var(--green)' }}>
-                  {formatAr(ventes.reduce((s, v) => s + (v.montant_total || 0), 0))}
-                </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
-                  {formatAr(ventes.reduce((s, v) => s + (v.montant_paye || 0), 0))}
-                </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--orange)' }}>
-                  {formatAr(ventes.reduce((s, v) => s + (v.reste_a_payer || 0), 0))}
-                </td>
-                <td colSpan={2} />
-              </tr>
-            </tfoot>
-          </table>
+                    </div>
+                    <StatusBadge status={v.statut} />
+                  </div>
+                  {/* Ligne 2 : montants */}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
+                    <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 10px' }}>
+                      <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3, fontWeight:600 }}>TOTAL</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{formatAr(v.montant_total)}</div>
+                    </div>
+                    <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 10px' }}>
+                      <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3, fontWeight:600 }}>PAYÉ</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'var(--green)' }}>{formatAr(v.montant_paye)}</div>
+                    </div>
+                    <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 10px' }}>
+                      <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3, fontWeight:600 }}>SOLDE</div>
+                      <div style={{ fontSize:13, fontWeight:700, color: solde>0?'var(--orange)':'var(--green)' }}>
+                        {solde>0 ? formatAr(solde) : '✓'}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:7 }}>
+                    <button onClick={()=>handlePrintTicket(v.id)} style={{ ...btn('var(--card2)','var(--card2)'), padding:'9px 0', fontSize:16, border:'1px solid var(--border2)', borderRadius:10 }}>🖨️</button>
+                    <button onClick={()=>handleEditVente(v)}      style={{ ...btn('var(--blue-dim)','var(--blue-dim)'), padding:'9px 0', fontSize:16, border:'1px solid rgba(79,158,255,0.2)', borderRadius:10 }}>✏️</button>
+                    <button onClick={()=>handleDeleteVente(v.id)} style={{ ...btn('var(--red-dim)','var(--red-dim)'), padding:'9px 0', fontSize:16, color:'var(--red)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10 }}>🗑️</button>
+                  </div>
+                </div>
+              );
+            })
+          }
+          {/* Total mobile */}
+          {ventes.length > 0 && (
+            <div style={{ background:'var(--card)', borderRadius:14, border:'1px solid var(--border2)', padding:'14px 16px', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+              <span style={{ fontWeight:700, fontSize:13 }}>TOTAL GÉNÉRAL</span>
+              <div style={{ display:'flex', gap:16 }}>
+                <span style={{ color:'var(--green)', fontWeight:800 }}>{formatAr(ventes.reduce((s,v)=>s+(v.montant_total||0),0))}</span>
+                <span style={{ color:'var(--orange)', fontWeight:700 }}>Solde: {formatAr(ventes.reduce((s,v)=>s+(v.reste_a_payer||0),0))}</span>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        <div style={{ background:'var(--card)', borderRadius:14, border:'1px solid var(--border2)', overflow:'hidden' }}>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ background:'var(--bg)', fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                  <th style={{ padding:'10px 12px', textAlign:'left' }}>Facture</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left' }}>Client</th>
+                  <th style={{ padding:'10px 12px', textAlign:'left' }}>Date</th>
+                  <th style={{ padding:'10px 12px', textAlign:'right' }}>Montant</th>
+                  <th style={{ padding:'10px 12px', textAlign:'right' }}>Payé</th>
+                  <th style={{ padding:'10px 12px', textAlign:'right' }}>Solde</th>
+                  <th style={{ padding:'10px 12px', textAlign:'center' }}>Statut</th>
+                  <th style={{ padding:'10px 12px', textAlign:'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ventes.length === 0
+                  ? <tr><td colSpan={8} style={{ padding:48, textAlign:'center', color:'var(--muted)' }}><div style={{ fontSize:28, marginBottom:8 }}>💰</div>Aucune vente</td></tr>
+                  : ventes.map(v => {
+                    const solde = v.reste_a_payer || 0;
+                    return (
+                      <tr key={v.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                        <td style={{ padding:'10px 12px', fontWeight:600, fontSize:13 }}>{v.numero_facture}</td>
+                        <td style={{ padding:'10px 12px' }}>{v.client_nom || <span style={{ color:'var(--muted)' }}>—</span>}</td>
+                        <td style={{ padding:'10px 12px', fontSize:13 }}>{new Date(v.date_vente).toLocaleDateString('fr-FR')}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600 }}>{formatAr(v.montant_total)}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right' }}>{formatAr(v.montant_paye)}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, color:solde>0?'var(--orange)':'var(--green)' }}>{solde>0?formatAr(solde):'✓'}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'center' }}><StatusBadge status={v.statut} /></td>
+                        <td style={{ padding:'10px 12px', textAlign:'center' }}>
+                          <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
+                            <button onClick={()=>handlePrintTicket(v.id)} style={{ ...btn('var(--card2)','var(--card2)'), padding:'5px 9px', fontSize:13, border:'1px solid var(--border2)', color:'var(--muted)' }}>🖨️</button>
+                            <button onClick={()=>handleEditVente(v)}      style={{ ...btn('var(--card2)','var(--card2)'), padding:'5px 9px', fontSize:13, border:'1px solid var(--border2)', color:'var(--muted)' }}>✏️</button>
+                            <button onClick={()=>handleDeleteVente(v.id)} style={{ ...btn('var(--red-dim)','var(--red-dim)'), padding:'5px 9px', fontSize:13, color:'var(--red)', border:'1px solid rgba(248,113,113,0.2)' }}>🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background:'var(--bg)', borderTop:'2px solid var(--border2)' }}>
+                  <td colSpan={3} style={{ padding:'10px 12px', fontWeight:700, fontSize:13 }}>TOTAL GÉNÉRAL</td>
+                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:800, fontSize:15, color:'var(--green)' }}>{formatAr(ventes.reduce((s,v)=>s+(v.montant_total||0),0))}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700 }}>{formatAr(ventes.reduce((s,v)=>s+(v.montant_paye||0),0))}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, color:'var(--orange)' }}>{formatAr(ventes.reduce((s,v)=>s+(v.reste_a_payer||0),0))}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal Nouvelle/Modification vente */}
       {showModal && (

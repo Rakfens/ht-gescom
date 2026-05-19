@@ -63,6 +63,13 @@ export default function Achats() {
   const [panier, setPanier] = useState([]);
   const [searchProduit, setSearchProduit] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [isMobile,      setIsMobile]      = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const fn = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
 
   // #4 : mémoriser les fournisseurs déjà saisis pour autocomplete
   const [fournisseursConnus, setFournisseursConnus] = useState([]);
@@ -212,66 +219,105 @@ export default function Achats() {
         </button>
       </div>
 
-      {/* Tableau */}
-      <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border2)', overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg)', fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Commande</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Fournisseur</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left' }}>Date</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Montant</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Payé</th>
-                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Solde</th>
-                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {achats.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 48, textAlign: 'center', color: 'var(--muted)' }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>📥</div>Aucun achat enregistré
-                </td></tr>
-              ) : achats.map(a => {
-                const solde = (a.montant_total || 0) - (a.montant_paye || 0);
-                return (
-                  <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, fontSize: 13 }}>{a.numero_commande}</td>
-                    <td style={{ padding: '10px 12px' }}>{a.fournisseur_nom}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>{new Date(a.date_achat).toLocaleDateString('fr-FR')}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{formatAr(a.montant_total)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>{formatAr(a.montant_paye)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: solde > 0 ? 'var(--orange)' : 'var(--green)' }}>
-                      {solde > 0 ? formatAr(solde) : '✓'}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
-                        <button onClick={() => handleEditAchat(a)} style={{ ...btn('var(--card2)', 'var(--card2)'), padding: '5px 9px', fontSize: 13, border: '1px solid var(--border2)', color: 'var(--muted)' }} title="Modifier">✏️</button>
-                        <button onClick={() => handleDeleteAchat(a.id)} style={{ ...btn('var(--red-dim)', 'var(--red-dim)'), padding: '5px 9px', fontSize: 13, color: 'var(--red)', border: '1px solid rgba(248,113,113,0.2)' }} title="Supprimer">🗑️</button>
+      {/* Mobile : cards / Desktop : tableau */}
+      {isMobile ? (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {achats.length === 0
+            ? <div style={{ textAlign:'center', color:'var(--muted)', padding:48 }}><div style={{ fontSize:28, marginBottom:8 }}>📥</div>Aucun achat</div>
+            : achats.map(a => {
+              const solde = (a.montant_total||0)-(a.montant_paye||0);
+              return (
+                <div key={a.id} style={{ background:'var(--card)', border:'1px solid var(--border2)', borderRadius:16, padding:16, animation:'fadeUp 0.3s ease both' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:14, color:'var(--text)' }}>{a.numero_commande}</div>
+                      <div style={{ fontSize:12, color:'var(--muted)', marginTop:2 }}>
+                        {a.fournisseur_nom} · {new Date(a.date_achat).toLocaleDateString('fr-FR')}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ background: 'var(--bg)', borderTop: '2px solid var(--border2)' }}>
-                <td colSpan={3} style={{ padding: '10px 12px', fontWeight: 700, fontSize: 13 }}>TOTAL</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, fontSize: 15, color: 'var(--orange)' }}>
-                  {formatAr(achats.reduce((s, a) => s + (a.montant_total || 0), 0))}
-                </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
-                  {formatAr(achats.reduce((s, a) => s + (a.montant_paye || 0), 0))}
-                </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--orange)' }}>
-                  {formatAr(achats.reduce((s, a) => s + Math.max(0, (a.montant_total || 0) - (a.montant_paye || 0)), 0))}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
+                    </div>
+                    <span style={{ background: solde>0?'var(--orange-dim)':'var(--green-dim)', color: solde>0?'var(--orange)':'var(--green)', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700 }}>
+                      {solde>0 ? 'Crédit' : '✓ Soldé'}
+                    </span>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
+                    <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 10px' }}>
+                      <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3, fontWeight:600 }}>TOTAL</div>
+                      <div style={{ fontSize:13, fontWeight:700 }}>{formatAr(a.montant_total)}</div>
+                    </div>
+                    <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 10px' }}>
+                      <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3, fontWeight:600 }}>PAYÉ</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'var(--green)' }}>{formatAr(a.montant_paye)}</div>
+                    </div>
+                    <div style={{ background:'var(--bg)', borderRadius:10, padding:'8px 10px' }}>
+                      <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3, fontWeight:600 }}>SOLDE</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:solde>0?'var(--orange)':'var(--green)' }}>{solde>0?formatAr(solde):'✓'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7 }}>
+                    <button onClick={()=>handleEditAchat(a)}     style={{ ...btn('var(--blue-dim)','var(--blue-dim)'), padding:'10px 0', fontSize:15, border:'1px solid rgba(79,158,255,0.2)', borderRadius:10 }}>✏️ Modifier</button>
+                    <button onClick={()=>handleDeleteAchat(a.id)} style={{ ...btn('var(--red-dim)','var(--red-dim)'), padding:'10px 0', fontSize:15, color:'var(--red)', border:'1px solid rgba(248,113,113,0.2)', borderRadius:10 }}>🗑️ Supprimer</button>
+                  </div>
+                </div>
+              );
+            })
+          }
+          {achats.length > 0 && (
+            <div style={{ background:'var(--card)', borderRadius:14, border:'1px solid var(--border2)', padding:'14px 16px', display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+              <span style={{ fontWeight:700, fontSize:13 }}>TOTAL</span>
+              <div style={{ display:'flex', gap:16 }}>
+                <span style={{ color:'var(--orange)', fontWeight:800 }}>{formatAr(achats.reduce((s,a)=>s+(a.montant_total||0),0))}</span>
+                <span style={{ color:'var(--orange)', fontWeight:700 }}>Solde: {formatAr(achats.reduce((s,a)=>s+Math.max(0,(a.montant_total||0)-(a.montant_paye||0)),0))}</span>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        <div style={{ background:'var(--card)', borderRadius:14, border:'1px solid var(--border2)', overflow:'hidden' }}>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ background:'var(--bg)', fontSize:11, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                  {['Commande','Fournisseur','Date','Montant','Payé','Solde','Actions'].map(h=>(
+                    <th key={h} style={{ padding:'10px 12px', textAlign:['Montant','Payé','Solde'].includes(h)?'right':h==='Actions'?'center':'left' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {achats.length===0
+                  ? <tr><td colSpan={7} style={{ padding:48, textAlign:'center', color:'var(--muted)' }}><div style={{ fontSize:28, marginBottom:8 }}>📥</div>Aucun achat</td></tr>
+                  : achats.map(a => {
+                    const solde=(a.montant_total||0)-(a.montant_paye||0);
+                    return (
+                      <tr key={a.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                        <td style={{ padding:'10px 12px', fontWeight:600, fontSize:13 }}>{a.numero_commande}</td>
+                        <td style={{ padding:'10px 12px' }}>{a.fournisseur_nom}</td>
+                        <td style={{ padding:'10px 12px', fontSize:13 }}>{new Date(a.date_achat).toLocaleDateString('fr-FR')}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600 }}>{formatAr(a.montant_total)}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right' }}>{formatAr(a.montant_paye)}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, color:solde>0?'var(--orange)':'var(--green)' }}>{solde>0?formatAr(solde):'✓'}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'center' }}>
+                          <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
+                            <button onClick={()=>handleEditAchat(a)}     style={{ ...btn('var(--card2)','var(--card2)'), padding:'5px 9px', fontSize:13, border:'1px solid var(--border2)', color:'var(--muted)' }}>✏️</button>
+                            <button onClick={()=>handleDeleteAchat(a.id)} style={{ ...btn('var(--red-dim)','var(--red-dim)'), padding:'5px 9px', fontSize:13, color:'var(--red)', border:'1px solid rgba(248,113,113,0.2)' }}>🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background:'var(--bg)', borderTop:'2px solid var(--border2)' }}>
+                  <td colSpan={3} style={{ padding:'10px 12px', fontWeight:700, fontSize:13 }}>TOTAL</td>
+                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:800, fontSize:15, color:'var(--orange)' }}>{formatAr(achats.reduce((s,a)=>s+(a.montant_total||0),0))}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700 }}>{formatAr(achats.reduce((s,a)=>s+(a.montant_paye||0),0))}</td>
+                  <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, color:'var(--orange)' }}>{formatAr(achats.reduce((s,a)=>s+Math.max(0,(a.montant_total||0)-(a.montant_paye||0)),0))}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (

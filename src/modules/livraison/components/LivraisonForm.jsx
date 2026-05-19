@@ -68,10 +68,10 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 18 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 18 }}>
         Nouvelle livraison {currentCompany && `- ${currentCompany.name}`}
       </h1>
-      <div style={{ background: COLORS.card, borderRadius: 14, padding: 18, border: '1px solid ' + COLORS.border2 }}>
+      <div style={{ background: 'var(--card)', borderRadius: 14, padding: 18, border: '1px solid var(--border2)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 16 }}>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -84,7 +84,7 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
               <label style={lbl()}>💰 Montant (Ar)</label>
               <input 
                 type="number" 
-                style={{ ...inp(), opacity: form.paiement === 'client' ? 0.5 : 1, background: form.paiement === 'client' ? COLORS.border : COLORS.bg }}
+                style={{ ...inp(), opacity: form.paiement === 'client' ? 0.5 : 1, background: form.paiement === 'client' ? 'var(--border)' : 'var(--bg)' }}
                 placeholder="50000" 
                 value={form.montant} 
                 onChange={e => setForm({ ...form, montant: e.target.value })}
@@ -93,8 +93,8 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
             </div>
           </div>
 
-          <div style={{ background: '#1e3a5f', borderRadius: 10, padding: 12, marginBottom: 4 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ background: 'var(--blue-dim)', borderRadius: 10, padding: 12, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>🏪</span> CLIENT DONNEUR (nous confie le colis)
             </div>
             <div>
@@ -104,8 +104,8 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
             </div>
           </div>
 
-          <div style={{ background: '#0c4a6e', borderRadius: 10, padding: 12, marginBottom: 4 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ background: 'var(--blue-dim)', borderRadius: 10, padding: 12, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--teal)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>🚚</span> DESTINATAIRE (reçoit le colis)
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -147,7 +147,7 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
             <label style={lbl()}>💳 Mode de paiement</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {Object.entries(PAIE_MODES).map(([k, v]) => (
-                <button key={k} onClick={() => setForm({ ...form, paiement: k })} style={{ padding: '10px 8px', border: '2px solid ' + (form.paiement === k ? COLORS.blue : COLORS.border2), borderRadius: 9, background: form.paiement === k ? '#1e3a5f' : COLORS.bg, color: form.paiement === k ? '#60a5fa' : COLORS.subtle, cursor: 'pointer', fontSize: 12, fontWeight: 600, textAlign: 'center' }}>
+                <button key={k} onClick={() => setForm({ ...form, paiement: k })} style={{ padding: '10px 8px', border: '2px solid ' + (form.paiement === k ? 'var(--blue)' : 'var(--border2)'), borderRadius: 9, background: form.paiement === k ? 'var(--blue-dim)' : 'var(--bg)', color: form.paiement === k ? 'var(--blue)' : 'var(--subtle)', cursor: 'pointer', fontSize: 12, fontWeight: 600, textAlign: 'center' }}>
                   <div style={{ fontSize: 18 }}>{v.icon}</div>
                   <div style={{ fontSize: 11, marginTop: 2 }}>{v.label}</div>
                 </button>
@@ -168,7 +168,7 @@ export const LivraisonForm = ({ agents, onAddLivraison, showToast, suggestions }
           </div>
 
         </div>
-        <button style={{ ...btn(COLORS.blue, '#2563eb'), width: '100%', padding: 14, fontSize: 15 }} onClick={handleSubmit}>✅ Enregistrer la livraison</button>
+        <button style={{ ...btn('var(--blue)', 'var(--blue2)'), width: '100%', padding: 14, fontSize: 15 }} onClick={handleSubmit}>✅ Enregistrer la livraison</button>
       </div>
     </div>
   );

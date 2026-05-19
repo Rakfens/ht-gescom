@@ -1,5 +1,6 @@
 // src/modules/livraison/pages/Dashboard.jsx
 import { useState, useEffect } from 'react';
+import { CardSkeleton } from '../../shared/components/common/Loader';
 import { useCompany } from '../../shared/context/CompanyContext';
 import { formatAr, TODAY, currentMonth, monthLabel, shouldCountGerantCommission, EXCLUDED_CLIENTS } from '../../shared/utils/constants';
 import { btn, tag, inpSm } from '../../shared/utils/helpers';  
@@ -39,10 +40,8 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
       setLoadingRecup(true);
       try {
         const data = await getRecuperationsByDate(selectedDate);
-        console.log('Récupérations chargées pour le', selectedDate, ':', data);
         setRecuperationsJour(data || []);
       } catch (error) {
-        console.error('Erreur chargement récupérations:', error);
       } finally {
         setLoadingRecup(false);
       }
@@ -54,7 +53,6 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
   const totalRecuperationsJour = recuperationsJour.reduce((s, r) => s + (r.frais_recuperation || 0), 0);
   const nbRecuperationsJour = recuperationsJour.length;
 
-  console.log('Total récupérations du jour:', totalRecuperationsJour, 'Nombre:', nbRecuperationsJour);
 
   // Regrouper par livreur
   const recuperationsParLivreur = recuperationsJour.reduce((acc, r) => {
@@ -68,7 +66,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 6 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 6 }}>
         Dashboard {currentCompany?.name || 'HT-GesCom'}
       </h1>
       
@@ -101,15 +99,15 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
       <div style={{ background: 'linear-gradient(135deg, #1e3a5f, #0b1120)', border: '1px solid #f59e0b', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 700, marginBottom: 4 }}>📦 RÉCUPÉRATIONS MATINALES</div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9' }}>{formatAr(totalRecuperationsJour)}</div>
+            <div style={{ fontSize: 12, color: 'var(--yellow)', fontWeight: 700, marginBottom: 4 }}>📦 RÉCUPÉRATIONS MATINALES</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--text)' }}>{formatAr(totalRecuperationsJour)}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{nbRecuperationsJour} récupération(s)</div>
           </div>
           <div>
-            <label style={{ fontSize: 11, color: '#f59e0b', marginBottom: 4, display: 'block' }}>📅 Sélectionner une date</label>
+            <label style={{ fontSize: 11, color: 'var(--yellow)', marginBottom: 4, display: 'block' }}>📅 Sélectionner une date</label>
             <input 
               type="date" 
-              style={{ ...inpSm(), width: 'auto', background: '#0b1120', border: '1px solid #f59e0b' }} 
+              style={{ ...inpSm(), width: 'auto', background: 'var(--bg)', border: '1px solid #f59e0b' }} 
               value={selectedDate} 
               onChange={e => setSelectedDate(e.target.value)}
             />
@@ -118,7 +116,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
         
         {/* Indicateur de chargement */}
         {loadingRecup && (
-          <div style={{ textAlign: 'center', color: '#64748b', padding: '20px 0' }}>
+          <div style={{ textAlign: 'center', color: 'var(--subtle)', padding: '20px 0' }}>
             Chargement...
           </div>
         )}
@@ -129,10 +127,10 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
             {Object.values(recuperationsParLivreur).map(rl => (
               <div key={rl.livreur} style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
-                  <span style={{ fontWeight: 700, color: '#f1f5f9' }}>👨‍💼 {rl.livreur}</span>
-                  <span style={{ color: '#f59e0b' }}>{rl.nb} récup. • {formatAr(rl.total)}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text)' }}>👨‍💼 {rl.livreur}</span>
+                  <span style={{ color: 'var(--yellow)' }}>{rl.nb} récup. • {formatAr(rl.total)}</span>
                 </div>
-                <div style={{ background: '#0b1120', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ background: 'var(--bg)', borderRadius: 8, overflow: 'hidden' }}>
                   {rl.details.map((d, idx) => (
                     <div key={idx} style={{ 
                       display: 'flex', 
@@ -141,8 +139,8 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
                       borderBottom: idx < rl.details.length - 1 ? '1px solid #1e293b' : 'none',
                       fontSize: 11
                     }}>
-                      <span style={{ color: '#94a3b8' }}>🏪 {d.client}</span>
-                      <span style={{ color: '#34d399', fontWeight: 600 }}>{formatAr(d.frais)}</span>
+                      <span style={{ color: 'var(--muted)' }}>🏪 {d.client}</span>
+                      <span style={{ color: 'var(--green)', fontWeight: 600 }}>{formatAr(d.frais)}</span>
                     </div>
                   ))}
                 </div>
@@ -151,7 +149,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
           </div>
         ) : (
           !loadingRecup && (
-            <div style={{ textAlign: 'center', color: '#64748b', padding: '20px 0' }}>
+            <div style={{ textAlign: 'center', color: 'var(--subtle)', padding: '20px 0' }}>
               Aucune récupération enregistrée pour cette date.
             </div>
           )
@@ -163,7 +161,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--purple)', fontWeight: 700, marginBottom: 4 }}>🧑‍💼 GÉRANT — Aujourd'hui ({TODAY()})</div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9' }}>{formatAr(gerantGain)}</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--text)' }}>{formatAr(gerantGain)}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{livsGerant.length} livraisons × {formatAr(commissionGerant)}</div>
             {excludedToday.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--orange)', marginTop: 2 }}>
@@ -171,7 +169,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
               </div>
             )}
           </div>
-          <button style={{ ...btn('var(--purple)', '#7c3aed'), padding: '10px 16px', fontSize: 12 }} onClick={() => onNavigate('gerant')}>Voir détails →</button>
+          <button style={{ ...btn('var(--purple)', 'var(--purple)'), padding: '10px 16px', fontSize: 12 }} onClick={() => onNavigate('gerant')}>Voir détails →</button>
         </div>
       </div>
 
@@ -210,7 +208,7 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
                     justifyContent: 'center',
                     fontWeight: 700,
                     fontSize: 18,
-                    color: '#fff'
+                    color: 'var(--text)'
                   }}>
                     {a.nom?.charAt(0) || '?'}
                   </div>
@@ -282,17 +280,17 @@ export const Dashboard = ({ agents, livraisons, commissionGerant, onNavigate }) 
                 return (
                   <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={tag('#1e3a5f', '#60a5fa')}>{a.nom}</span>
+                      <span style={tag('var(--blue-dim)', 'var(--blue)')}>{a.nom}</span>
                     </td>
                     <td style={{ padding: '10px 12px', fontWeight: 700 }}>{ls.length}</td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={tag('#14532d', 'var(--green)')}>{ls.filter(l => l.statut === 'livre').length}</span>
+                      <span style={tag('var(--green-dim)', 'var(--green)')}>{ls.filter(l => l.statut === 'livre').length}</span>
                     </td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={tag('#450a0a', 'var(--red)')}>{ls.filter(l => l.statut === 'retourne').length}</span>
+                      <span style={tag('var(--red-dim)', 'var(--red)')}>{ls.filter(l => l.statut === 'retourne').length}</span>
                     </td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={tag('#2e1065', 'var(--purple)')}>{ls.filter(l => l.statut === 'reporte').length}</span>
+                      <span style={tag('var(--purple-dim)', 'var(--purple)')}>{ls.filter(l => l.statut === 'reporte').length}</span>
                     </td>
                     <td style={{ padding: '10px 12px', color: 'var(--orange)', fontWeight: 600 }}>{formatAr(totalFrais)}</td>
                   </tr>
